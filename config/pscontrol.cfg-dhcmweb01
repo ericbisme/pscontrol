@@ -1,0 +1,13 @@
+# This configuration file is valid PERL which is eval'ed to load
+# the values into the software.  Command line parameters take precidence
+# over these values.  You can have multiple configuration files.
+#
+$action="gencfg";
+$domain="all";
+$configfile="/app_admin/scripts/utilities/pscontrol/config/pscontrol.cfg-dhcmweb01";
+$type="all";
+$nmaflag="1";
+# Index for arrays initialized
+$proi = 0; $webi = 0; $appi= 0;
+$web_u[$webi]="hcmdmo"; $web_d[$webi]="hcmdmo"; $web_p[$webi]="/opt/pscfg/hcmdmo-8.54.13" ; $web_v[$webi]="8.50"; $webi++; 
+$web_u[$webi]="hcmdev"; $web_d[$webi]="hcmdev"; $web_p[$webi]="/opt/pscfg/hcmdev-8.54.13" ; $web_v[$webi]="8.50"; $webi++; 

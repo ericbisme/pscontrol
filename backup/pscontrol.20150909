@@ -1,0 +1,1712 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+no warnings 'redefine';
+use File::Temp qw/ tempfile /;
+use Sys::Syslog;
+use Getopt::Long;
+use Pod::Usage;
+use Thread;
+$| = 1;
+our (
+    $hflag,      $thflag,     $vflag,     $mflag,        $wflag,
+    $nlflag,     $nmaflag,    $pflag,     $type,         $action, $ipcflag,
+    $parflag,
+    $actcount,   $prescript,  $ncflag,    $fflag,        $seconds,
+    $configfile, $postscript, $tracetype, $tracevalue,   $traceflag,
+    $queuetype,  $domain,     $VERSION,   $myconfigfile, @APPSERVERS,
+    @WEBSERVERS, @servern,    $delay
+);
+our (
+    @app_u, @app_d,  @app_p,  @app_v, @capp_u, @capp_d, @capp_p, @pro_u,
+    @pro_d, @pro_p,  @cpro_u, @pro_v, @cpro_d, @cpro_p, @web_u,  @web_d,
+    @web_p, @cweb_u, @cweb_d, @cweb_p, @web_v, @mythreads
+);
+my $commandline=join(' ',@ARGV);
+our $cfile;
+our $proi;
+our $webi;
+our $appi;
+our $cachermcommand;
+our $configdir;
+$queuetype  = 'queue';
+$tracevalue = "N/A";
+our $threadcount;
+our $tempname = `echo temp$$`;
+our $machine  = `uname -n`;
+chop $machine;
+$VERSION        = "1.52 5/7/2009";
+$seconds        = 30;
+$actcount       = 0;
+$cachermcommand = "rm -rf ";
+$configdir= "/app_admin/scripts/utilities/pscontrol/config";
+
+if ( existFile("$configdir/check_jsl-$machine") eq 'nofile' ) {
+    $nmaflag = 1;
+}
+else { $nmaflag = 0; }
+&processOptions;
+$queuetype = lowcase($queuetype);
+$domain    = lowcase($domain);
+$type      = lowcase($type);
+
+
+##Added option for delayed start. Default is 0 if not passed in
+sleep $delay;
+
+#
+# if we don't need to remove cache then put in a bogus command which
+# gives no output.
+if ($ncflag) { $cachermcommand = "alias aaa="; }
+if ( $prescript && !$pflag ) { system($prescript); }
+if ( $action eq "gencfg" ) { &genConfig; }
+if ( $action eq "stop" )   { logCommand($commandline); stopServer(); }
+if ( $action eq "start" )  { logCommand($commandline); startServer(); }
+if ( $action eq "stoppub" )   { logCommand($commandline); stopServerPub(); }
+if ( $action eq "startpub" )  { logCommand($commandline); startServerPub(); }
+if ( $action eq "trace" )  {
+    if (   $tracevalue ne "N/A"
+        && $tracetype
+        && ( $domain ne 'ALL' )
+        && ( $type   ne 'all' ) )
+    {
+        setTrace();
+    }
+}
+if ( $action eq "restart" ) {
+    logCommand($commandline); stopServer();
+    if ($wflag) { waitOnThreads(); }
+    logCommand($commandline); startServer();
+}
+if ( $action eq "list" )      { listServer(); }
+if ( $action eq "listqueue" ) { listQueue(); }
+if ( $action eq "status" )    { statusServer(); }
+if ($wflag) { waitOnThreads(); }
+if ( $action eq "stop" || $action eq "restart" && !$nlflag ) {
+    listServer();
+}
+if ( $postscript && !$pflag ) { system($postscript); }
+sub logCommand {
+ my $command=shift @_;
+ my $user=getUser();
+ openlog( "PSCONTROL", 'user' );
+ syslog( 'info', "User $user ran pscontrol $command" );
+ closelog();
+}
+sub killHungTmshutdown {
+
+    # killHungTmshutdown($app_u[$i],$app_d[$i]);
+    my $myuser   = shift @_;
+    my $mydomain = shift @_;
+    my $command  = startCommand($myuser);
+    my $wholecommand;
+    my $pid =
+      `ps -e -o '%p,%a' | grep tmshutdown | grep -v grep | sed -e 's/ *//g' | 
+cut -d, -f1 | tail -1`;
+    if ( $pid && $pid > 1000 ) {
+        chop $pid;
+        print "pid of tmsshutdown is $pid\n";
+        my $parent = `ps -o '%P' -p $pid | sed -e 's/ *//g' | tail -1`;
+        chop $parent;
+        if ( $parent && $parent > 1000 ) {
+            my $grandparent;
+            $grandparent = `ps -p $parent -o '%p,%a'| tail -1`;
+            my $arg;
+            ( my $grandparentid, $arg ) = split( /,/, $grandparent );
+            if ( $grandparentid && $grandparentid > 1000 ) {
+                print "pid of tsmshutdown grandparent is $grandparentid \n";
+                if ( $arg =~ m/$mydomain/ ) {
+                    $wholecommand =
+                      spliceStrings( "", $command, "kill -9 ", $pid );
+                    runCommand($wholecommand);
+                    $wholecommand =
+                      spliceStrings( "", $command, "kill -9 ", $parent );
+                    runCommand($wholecommand);
+                    $wholecommand =
+                      spliceStrings( "", $command, "kill -9 ", $grandparent );
+                    runCommand($wholecommand);
+                }
+            }
+        }
+    }
+
+    # find hung process and return its parent id
+    # find parent and return its parent
+    # do the check and make sure the parents parent has the right
+    # userid and domain
+}
+
+sub setTrace {
+
+    sub getConfig {
+        my $cmddir = '';
+        my $i      = 0;
+        my $app;
+        if ( $type eq 'app' ) {
+            $i = 0;
+            foreach $app (@app_u) {
+                if ( $app ne "" && $app_d[$i] eq $domain ) {
+                    $cmddir =
+                      $app_p[$i] . "appserv/" . $app_d[$i] . "/psappsrv.cfg";
+                }
+                $i++;
+            }
+        }
+        else {
+            $i = 0;
+            foreach $app (@pro_u) {
+                if ( $app ne "" && $pro_d[$i] eq $domain ) {
+                    $cmddir =
+                      $pro_p[$i] . "appserv/prcs/" . $pro_d[$i] . "/psprcs.cfg";
+                }
+                $i++;
+            }
+        }
+        return $cmddir;
+    }
+    my $cmddir = getConfig();
+
+    # Need "Allow Dynamic Changes=Y" set for these to work
+    if (   $tracetype eq 'LogFence'
+        || $tracetype eq 'TraceSQL'
+        || $tracetype eq 'TracePC'
+        || $tracetype eq 'TracePPR'
+        || $tracetype eq 'DebuggerMsgLogEnable' )
+    {
+        $_ = $cmddir;
+        my $tracetemp = $tracetype;
+        if ( $tracetype eq 'TraceSQL' && /psappsrv/ ) {
+            $tracetemp = 'TraceSql';
+        }
+        my $cmd =
+"echo \"/$tracetemp=\nd\n-\na\n$tracetemp=$tracevalue\n.\nw\nq\n\" | /bin/ed $cmddir";
+        if ($pflag) { print "$cmd\n"; }
+        else {
+            my $result = `$cmd`;
+            if ($vflag) { print "The result of the trace was $cmd\n"; }
+        }
+    }
+    else {
+        print
+"Invalid trace parameter specified!\n  Only traces of types:\nLogFence, TraceSQL, TracePC, TracePPR, and DebuggerMsgLogEnable can be set.\n";
+    }
+}
+
+sub maintenance {
+    my $ldomain = shift @_;
+    my $oldv    = shift @_;
+    my $newv    = shift @_;
+    if ( !$nmaflag ) {
+        if ($pflag) {
+            print
+"`echo \"/$ldomain\ns/$oldv/$newv/g\nw\nq\n\" | /bin/ed $configdir/check_jsl-$machine`\n";
+        }
+        else {
+`echo "/$ldomain\ns/$oldv/$newv/g\nw\nq\n" | /bin/ed $configdir/config/check_jsl-$machine`;
+        }
+    }
+}
+
+sub beginMaintenance {
+    my $ldomain = shift @_;
+    maintenance( $ldomain, 'enable', 'disable' );
+    print
+"Since you did not specify the --nomaint flag,\nmake sure you start the server with pscontrol also,\nso that 'jsl' checking is turned back on for domain $ldomain!\n";
+    print "JSL checking disabled for $ldomain!\n";
+}
+
+sub endMaintenance {
+    my $ldomain = shift @_;
+    maintenance( $ldomain, 'disable', 'enable' );
+    print "JSL checking enabled for $ldomain!\n";
+}
+
+sub upcase {
+    my $str = shift @_;
+    $str =~ tr/a-z/A-Z/;
+    return $str;
+}
+
+sub lowcase {
+    my $str = shift @_;
+    $str =~ tr/A-Z/a-z/;
+    return $str;
+}
+
+sub waitOnThreads {
+    my $mythreads;
+    foreach $mythreads (@mythreads) {
+        $mythreads->join();
+    }
+    print "Threads finished executing.\n";
+}
+
+sub getUser() {
+    my $myuserid = `/usr/bin/whoami`;
+    chop($myuserid);
+    return $myuserid;
+}
+
+sub getUserDir {
+    my $username = shift @_;
+    my ( $name, $dir, $directory );
+    setpwent;
+    while ( ( $name, undef, undef, undef, undef, undef, undef, $dir, undef ) =
+        getpwent() )
+    {
+        if ( $name eq $username ) { $directory = $dir; }
+    }
+    return $directory;
+}
+
+sub existFile {
+    my $myfilename = shift @_;
+    my $exist      = "nofile";
+    $myfilename = glob($myfilename);
+    if ($myfilename) {
+        if ( my $st = stat($myfilename) ) {
+            $exist = "exists";
+        }
+    }
+    return $exist;
+}
+
+sub getOwner() {
+
+    #
+    #passed in a filename, returns the owner
+    #
+    my $filename = @_;
+    my ( $uid, $gid );
+    if ( -x $filename ) {
+        my (
+            undef, undef, undef, undef, $uid,  $gid, undef,
+            undef, undef, undef, undef, undef, undef
+          )
+
+          #          = stat(_);
+    }
+    my $name = getpwuid $uid;
+    return $name;
+}
+
+sub convertToProgram {
+    my ( $varname, $varval ) = @_;
+    if ($varval) {
+        return "$varname=\"$varval\";\n";
+    }
+    else {
+        return "";
+    }
+}
+
+sub writeGeneralConfiguration {
+
+    print $cfile convertToProgram( '$action',     $action );
+    print $cfile convertToProgram( '$vflag',      $vflag );
+    print $cfile convertToProgram( '$prescript',  $prescript );
+    print $cfile convertToProgram( '$postscript', $postscript );
+    print $cfile convertToProgram( '$domain',     lowcase($domain) );
+    print $cfile convertToProgram( '$configfile', $configfile );
+    print $cfile convertToProgram( '$thflag',     $thflag );
+    print $cfile convertToProgram( '$wflag',      $wflag );
+    print $cfile convertToProgram( '$type',       lowcase($type) );
+    print $cfile convertToProgram( '$ncflag',     $ncflag );
+    print $cfile convertToProgram( '$nmaflag',    $nmaflag );
+    print $cfile "# Index for arrays initialized\n";
+    print $cfile '$proi = 0; $webi = 0; $appi= 0;';
+    print $cfile "\n";
+}
+
+sub readConfig() {
+    my @lines;
+    my $templine;
+    if ( open( $cfile, "$configfile" ) ) {
+        @lines = <$cfile>;
+        close($cfile);
+        while (@lines) {
+            $templine = shift(@lines);
+            eval($templine);
+        }
+    }
+    else {
+        print
+"No configuration file exists.  Will generate a default one based\n on all of the servers on this host...\n";
+        genConfig();
+    }
+}
+
+sub genConfig {
+    my $strtmp;
+    my @arrtmp;
+    open( $cfile, ">$configfile" )
+      || die "Unable to open configuration file $configfile for writing\n";
+    print $cfile
+      "# This configuration file is valid PERL which is eval'ed to load\n";
+    print $cfile
+"# the values into the software.  Command line parameters take precidence\n";
+    print $cfile
+      "# over these values.  You can have multiple configuration files.\n";
+    print $cfile "#\n";
+    writeGeneralConfiguration();
+    @arrtmp = findAppServers("");
+    print $cfile @arrtmp;
+    @arrtmp = findProcessServers("");
+    print $cfile @arrtmp;
+    @arrtmp = findWebServers("");
+    print $cfile @arrtmp;
+    close($cfile) || die "Unable to close configuration file -- $configfile\n";
+}
+
+sub setDefaults() {
+
+    my $DefConfigFile = "$configdir/pscontrol.cfg-" . $machine;
+
+    #Getopt::Long::Configure("debug");
+    #Getopt::Long::Configure("pass_through");
+    if ( !$action ) { $action = "status"; }
+    if (   !$domain
+        && $action ne "status"
+        && $action ne "listqueue"
+        && $action ne "list" )
+    {
+        print
+"Domain must be specified on the command line.  Use --domain all for all servers.\n";
+        exit;
+        $domain = "ALL";
+    }
+    if ( !$type )       { $type       = "all"; }
+    if ( !$configfile ) { $configfile = $DefConfigFile; }
+
+    #    if ( !$seconds )    { $seconds    = 30; }
+    if ( !$delay )    { $delay    = 0; }
+}
+
+#
+#
+sub getFileOptions() {
+    readConfig();
+}
+
+sub getCommandOptions() {
+    GetOptions(
+        'help!'     => \$hflag,
+        'man!'      => \$mflag,
+        'gencfg'    => sub { $action = "gencfg"; $actcount++; },
+        'start'     => sub { $action = "start"; $actcount++; },
+        'stop'      => sub { $action = "stop"; $actcount++; },
+        'startpub'     => sub { $action = "startpub"; $actcount++; },
+        'stoppub'      => sub { $action = "stoppub"; $actcount++; },
+        'restart'   => sub { $action = "restart"; $actcount++; },
+        'trace'     => sub { $action = "trace"; $actcount++; },
+        'status'    => sub { $action = "status"; $actcount++; },
+        'list'      => sub { $action = "list"; $actcount++; },
+        'listqueue' => sub { $action = "listqueue"; $actcount++; },
+        'version' => sub { print "pscontrol $VERSION \n"; exit; },
+        'verbose'      => \$vflag,
+        'delay:s'      => \$delay,
+        'nolist'       => \$nlflag,
+        'config:s'     => \$configfile,
+        'domain:s'     => \$domain,
+        'prescript:s'  => \$prescript,
+        'thread'       => \$thflag,
+        'wait'         => \$wflag,
+        'type:s'       => \$type,
+        'queuetype:s'  => \$queuetype,
+        'preview'      => \$pflag,
+        'nocache'      => \$ncflag,
+        'nomaint'      => \$nmaflag,
+        'cleanipc'     => \$ipcflag,
+        'parallel'     => \$parflag,
+        'force'        => \$fflag,
+        'seconds:s'    => \$seconds,
+        'tracetype:s'  => \$tracetype,
+        'tracevalue:s' => \$tracevalue,
+        'postscript:s' => \$postscript
+      )
+      or pod2usage( -verbose => 1 ) && exit;
+}
+
+sub nullArrays() {
+    $#app_u = -1;
+    $#pro_u = -1;
+    $#web_u = -1;
+}
+
+#
+#
+sub processOptions {
+
+    #
+    # Subroutine for Setting/getting program options
+    #
+    # use domain "cached" to read them from
+    # file /tmp/webservers.cache or /tmp/appservers.cache
+    # domain is started as the owner of the filesystem of the domain
+    #
+    #
+    my (
+        $shflag,  $smflag,  $saction,    $svflag,      $sconfigfile,
+        $sgencfg, $sdomain, $sprescript, $spostscript, $sthflag,
+        $swflag,  $stype,   $sncflag,    $snmaflag,    $squeuetype,
+        $sdelay,
+    );
+
+    my $storeresult = sub {
+        if ($hflag)      { $shflag      = $hflag; }
+        if ($mflag)      { $smflag      = $mflag; }
+        if ($action)     { $saction     = $action; }
+        if ($vflag)      { $svflag      = $vflag; }
+        if ($configfile) { $sconfigfile = $configfile; }
+        if ($domain)     { $sdomain     = lowcase($domain); }
+        if ($prescript)  { $sprescript  = $prescript; }
+        if ($thflag)     { $sthflag     = $thflag; }
+        if ($wflag)      { $swflag      = $wflag; }
+        if ($type)       { $stype       = lowcase($type); }
+        if ($queuetype)  { $squeuetype  = lowcase($queuetype); }
+        if ($ncflag)     { $sncflag     = $ncflag; }
+        if ($nmaflag)    { $snmaflag    = $nmaflag; }
+        if ($postscript) { $spostscript = $postscript; }
+        if ($delay)      { $sdelay      = $delay; }
+    };
+
+    my $restoreresult = sub {
+        if ($shflag)      { $hflag      = $shflag; }
+        if ($smflag)      { $mflag      = $smflag; }
+        if ($saction)     { $action     = $saction; }
+        if ($svflag)      { $vflag      = $svflag; }
+        if ($sconfigfile) { $configfile = $sconfigfile; }
+        if ($sdomain)     { $domain     = $sdomain; }
+        if ($sprescript)  { $prescript  = $sprescript; }
+        if ($sthflag)     { $thflag     = $sthflag; }
+        if ($swflag)      { $wflag      = $swflag; }
+        if ($sncflag)     { $ncflag     = $sncflag; }
+        if ($snmaflag)    { $nmaflag    = $snmaflag; }
+        if ($stype)       { $type       = $stype; }
+        if ($squeuetype)  { $queuetype  = $squeuetype; }
+        if ($spostscript) { $postscript = $spostscript; }
+        if ($sdelay)      { $delay      = $sdelay; }
+    };
+    getCommandOptions();    #get command lines options
+    &$storeresult();        #stores command line variables
+    setDefaults();          #Calls routine to setDefaults
+    getFileOptions();       #Calls routine to read defaults from file
+    &$restoreresult();      # restores the results from the command line
+    pod2usage( -verbose => 1 ) && exit if defined $hflag;
+    pod2usage( -verbose => 2 ) && exit if defined $mflag;
+    pod2usage( -verbose => 0, -msg => "$0: Only 1 action can be defined.\n" )
+      && exit
+      if $actcount > 1;
+    pod2usage( -verbose => 0 ) && exit if $actcount == 0;
+}
+
+#
+#
+sub startCommand {
+
+    sub getShell {
+        my $userid = shift @_;
+        (
+            my $name,
+            my $passwd,
+            my $uid,
+            my $gid,
+            my $quota,
+            my $comment,
+            my $gcos,
+            my $dir,
+            my $shell
+          )
+          = getpwnam($userid);
+        $shell =~ s/.*\///g;
+        return $shell;
+    }
+    my $ulimit = "true";
+    if ($vflag) { $ulimit = "ulimit -a"; }
+    my $scommand = "";
+    my $cuser    = getUser();
+    my $euser    = shift(@_);
+    my $shell    = getShell($euser);
+    my $mypro    = getUserDir($euser);
+    my $profile  = '.profile';
+    if ( $shell eq 'bash' ) { $profile = '.bash_profile'; }
+    if ( -e "$mypro/$profile" ) { $mypro = "$mypro/$profile"; }
+    else { $mypro = "true"; }
+    if ( $cuser eq "root" ) { $scommand = "su - $euser -c \" $ulimit; "; }
+    else {
+
+        if ( $cuser eq $euser ) {
+            $scommand = "sh -c \" . $mypro ; $ulimit; ";
+        }
+        else {
+            $scommand = " sudo -u $euser sh -c \" . $mypro ; $ulimit; ";
+        }
+    }
+    return $scommand;
+}
+
+sub runCommand {
+
+    sub runSystem {
+        my $command = shift @_;
+        if ($pflag) { print "Command to be executed is:\n$command\n"; }
+        else { system($command); }
+    }
+    my $command = shift @_;
+    print "Running ...\n$command\n" if defined $vflag;
+    if ($thflag) {
+        $mythreads[$threadcount] = new Thread \&runSystem, $command;
+        $threadcount++;
+    }
+    else { runSystem($command); }
+}
+
+sub okToRun {
+    my $ctype   = shift @_;
+    my $cdomain = shift @_;
+    if ( $cdomain eq 'PIA' ) { $cdomain = shift @_; }
+
+    #print "ctype=$ctype , cdomain=$cdomain , domain=$domain , type=$type\n";
+    if ( $domain eq 'ALL' ) { $domain = 'ALL'; }
+    if (   ( $domain eq 'ALL'    && ( $type eq 'all' || $type eq $ctype ) )
+        || ( $domain eq $cdomain && ( $type eq 'all' || $type eq $ctype ) ) )
+    {
+        return 'true';
+    }
+    else { return 'false'; }
+}
+
+sub startServer {
+    my $i;
+    my $app;
+    my $command;
+    my $justname;
+    my $exist;
+    my $possiblefile = "";
+    my $bootcommand; 
+    print "Starting servers in domain:$domain\n";
+
+    #
+    # startServer cannot use the process since no processes are running
+    #
+    # gets server names from command line, config, from reading directory
+    #
+    $command     = "";
+    $i           = 0;
+    $threadcount = 0;
+    $#mythreads  = -1;
+    foreach $app (@app_u) {
+        if ( $app ne "" ) {
+            $command = startCommand( $app_u[$i] );
+            if ($app_v[$i] eq "8.50" && defined $parflag ) { $bootcommand="parallelboot"; } else {$bootcommand="boot"; }
+            $command = spliceStrings(
+                "",         "",
+                #$command,   " . ",
+                #$app_p[$i], "psconfig.sh; cd ",
+                $command, "psadmin -c $bootcommand -d ",
+                $app_d[$i], " ; \" "
+            );
+            if ( 'true' eq okToRun( 'app', $app_d[$i] ) ) {
+                runCommand($command);
+                endMaintenance( $app_d[$i] );
+            }
+        }
+        $i++;
+    }
+    $command = "";
+    $i       = 0;
+    foreach $app (@pro_u) {
+        if ( $app ne "" ) {
+            $command = startCommand( $pro_u[$i] );
+            $command = spliceStrings(
+                "", $command, " psadmin -p start -d ",
+                $pro_d[$i], " ; \" "
+            );
+            if ( 'true' eq okToRun( 'pro', $pro_d[$i] ) ) {
+                runCommand($command);
+            }
+        }
+        $i++;
+    }
+    $command = "";
+    $i       = 0;
+    foreach $app (@web_u) {
+        if ( $app ne "" ) {
+            $command = startCommand( $web_u[$i] );
+            $web_p[$i] =~ s/=//g;
+
+# different command to run if exists
+# /psoft/padev/webserv/PADEV/applications/peoplesoft/PSOL/*book*/admin/psolAdmin.sh start stop
+#
+            $justname = $web_p[$i];
+            $justname =~ s/\/.*\///;
+            $justname     = upcase($justname);
+            $possiblefile =
+              spliceStrings( $web_p[$i], "/webserv/", $justname,
+                "/applications/peoplesoft/PSOL/pa88books/admin/psolAdmin.sh" );
+            $exist = existFile($possiblefile);
+            if ( $exist eq "nofile" ) {
+                $command = spliceStrings(
+                    "",                  $command,
+                    " . ",               $web_p[$i],
+                    "/psconfig.sh; cd ", $web_p[$i],
+                    "/webserv/",         $justname,
+                    "/;  ./start",       $web_d[$i],
+                    ".sh  \" "
+                );
+            }
+            else {
+
+                #use $possiblefile
+                $possiblefile =~ s/psolAdmin.sh/ ; \.\/psolAdmin.sh/;
+                $command = spliceStrings(
+                    "",                  $command,
+                    " . ",               $web_p[$i],
+                    "/psconfig.sh; cd ", $web_p[$i],
+                    " ; cd ",            $possiblefile,
+                    " START; \" "
+                );
+            }
+            if ( 'true' eq okToRun( 'web', $web_d[$i], $justname ) ) {
+                runCommand($command);
+            }
+        }
+        $i++;
+    }
+}
+
+sub spliceStrings {
+
+    my $sstring = shift(@_);
+    for my $astring (@_) {
+
+        $sstring = $sstring . $astring;
+
+    }
+    return $sstring;
+}
+sub stopServer {
+
+    print "Stopping servers in domain: $domain type: $type.\n";
+    markRunningAppServers();
+    markRunningProServers();
+    $#mythreads  = -1;
+    $threadcount = 0;
+    my $threadstate = $thflag;
+    my $waitstate   = $wflag;
+    print "Stopping servers in domain: $domain type: $type.\n";
+    markRunningAppServers();
+    markRunningProServers();
+    markRunningWebServers();
+
+    if ($fflag) {
+
+        # turn threading on even if it is off
+        # turn wait off even if it is on otherwise process will not work
+        $thflag = 1;
+        $wflag  = 0;
+    }
+    if ( $seconds > 0 ) { stopApp("shutdown"); }
+    if ($fflag)         {
+
+        # reset threading back to its original state
+        # stop the servers with shutdown!
+        sleep $seconds;
+
+        #killThreads();
+        stopApp("shutdown!");
+        $thflag = $threadstate;
+        $wflag  = $waitstate;
+
+        #added an additional sleep for restart purposes to make sure
+        #there is time for all the processes to exit before the start.
+        if ( $type eq "app" ) { sleep 10; }
+
+        #
+    }
+   if ($seconds > 0) {stopPro("stop");}
+   if ($fflag)
+     {
+     sleep $seconds;
+     stopPro("kill");
+     $thflag=$threadstate;
+     $wflag=$waitstate;
+     sleep 10;
+    }
+    stopWeb();
+
+    sub stopApp {
+        my $psadminc = shift @_;
+        my $killstr  = "";
+        my $justname;
+        my $app;
+        my $i       = 0;
+        my $command = "";
+        my $exist;
+        my $possiblefile = "";
+        my $ipcclean="true";
+
+        foreach $app (@app_u) {
+            if ( $app ne "" ) {
+                if ($ipcflag && $app_v[$i] eq "8.50") { $ipcclean="psadmin -c cleanipc -d "; }
+                if ( $psadminc ne 'shutdown!' ) {
+                    $killstr =
+                        "; /bin/ps -e -o '%p,%a' | grep "
+                      . $app_d[$i]
+                      . " | grep psadmin | cut -d, -f1 | xargs kill -kill ";
+                }
+                else {
+                    killHungTmshutdown( $app_u[$i], $app_d[$i] );
+                }
+                $command = startCommand( $app_u[$i] );
+                $command = spliceStrings(
+                    #$command,   " . ",
+                    #$app_p[$i], "psconfig.sh; cd ",
+                    $command,  "psadmin -c $psadminc -d ",
+                    $app_d[$i], " ; $ipcclean $app_d[$i] ; $cachermcommand",
+                    $app_p[$i], "appserv/",
+                    $app_d[$i], "/CACHE/* ",
+                    $killstr,   "\""
+                );
+                if ( 'true' eq okToRun( 'app', $app_d[$i] ) ) {
+                    beginMaintenance( $app_d[$i] );
+                    runCommand($command);
+                }
+            }
+            $i++;
+        }
+    }
+
+    sub stopPro {
+        my $psadminc = shift @_;
+        my $justname;
+        my $app;
+        my $i       = 0;
+        my $command = "";
+        my $ipcclean="true";
+        my $exist;
+        my $possiblefile = "";
+        foreach $app (@pro_u) {
+            if ( $app ne "" ) {
+                if ($ipcflag && $app_v[$i] eq "8.50") { $ipcclean="./psadmin -p cleanipc -d "; }
+                $command = startCommand( $pro_u[$i] );
+                $command = spliceStrings(
+                    #$command,   " . ",
+                    #$pro_p[$i], "psconfig.sh; cd ",
+                    $command, " psadmin -p $psadminc -d ",
+                    $pro_d[$i], " ; $ipcclean $pro_d[$i] ; $cachermcommand",
+                    $pro_p[$i], "appserv/prcs/",
+                    $pro_d[$i], "/CACHE/* \" "
+                );
+                if ( 'true' eq okToRun( 'pro', $pro_d[$i] ) ) {
+                    runCommand($command);
+                }
+            }
+            $i++;
+        }
+
+    }
+
+    sub stopWeb {
+        my $justname;
+        my $app;
+        my $i       = 0;
+        my $command = "";
+        my $exist;
+        my $possiblefile = "";
+        foreach $app (@web_u) {
+            if ( $app ne "" ) {
+                $command = startCommand( $web_u[$i] );
+                $web_p[$i] =~ s/=//g;
+
+# different command to run if exists
+# /psoft/padev/webserv/PADEV/applications/peoplesoft/PSOL/*book*/admin/psolAdmin.sh start stop
+#
+                $justname = $web_p[$i];
+                $justname =~ s/\/.*\///;
+                $justname     = upcase($justname);
+                $possiblefile = spliceStrings(
+                    $web_p[$i],
+                    "/webserv/",
+                    $justname,
+                    "/applications/peoplesoft/PSOL/pa88books/admin/psolAdmin.sh"
+                );
+                $exist = existFile($possiblefile);
+                if ( $exist eq "nofile" ) {
+                    $command = spliceStrings(
+                        "",
+                        $command,
+                        " . ",
+                        $web_p[$i],
+                        "/psconfig.sh; cd ",
+                        $web_p[$i],
+                        "/webserv/",
+                        $justname,
+                        "/;  ./stop",
+                        $web_d[$i],
+".sh ;  cd ./applications/peoplesoft/PORTAL/ ; $cachermcommand./*/cache/* \" "
+                    );
+                }
+                else {
+
+                    #use $possiblefile
+                    $possiblefile =~ s/psolAdmin.sh/ ; \.\/psolAdmin.sh/;
+                    $command = spliceStrings(
+                        "",
+                        $command,
+                        " . ",
+                        $web_p[$i],
+                        "/psconfig.sh; cd ",
+                        $web_p[$i],
+                        " ; cd ",
+                        $possiblefile,
+                        " STOP; cd  cd ../../../../..  ;",
+"cd ./applications/peoplesoft/PORTAL/ ; $cachermcommand./*/cache/* \" "
+                    );
+                }
+                if ( 'true' eq okToRun( 'web', $web_d[$i], $justname ) ) {
+                    runCommand($command);
+                }
+            }
+            $i++;
+        }
+    }
+}
+
+sub markRunningWebServers() {
+    my @temp;
+    my $temp;
+    my $user;
+    my $domain;
+    eval( @temp = findWebServers("c") );
+    @servern = ();
+    foreach $temp (@temp) {
+        ( undef, $user, undef, undef, undef, $domain, undef ) =
+          split( '"', $temp );
+        $user = $user . $domain;
+        push @servern, $user;
+    }
+
+    # print @servern;
+    #    if ( !($domain eq "ALL") ) {
+    #        if ( $type eq "ALL" || $type eq "web" ) {
+    #        }
+    #    }
+}
+
+sub markRunningAppServers() {
+    my @temp;
+    my $temp;
+    my $user;
+    my $domain;
+    my $dir;
+    if ( !$domain ) { $domain = ""; }
+    eval( @temp = findAppServers("c") );
+    @servern = ();
+
+    foreach $temp (@temp) {
+
+        #        print "$temp\n";
+        ( undef, $user, undef, $dir, undef, $domain, undef ) =
+          split( '"', $temp );
+        $user = $user . $dir . $domain;
+
+        #        print $user;
+        #push @servern,$user;
+    }
+
+    #    print @servern;
+    if ( $domain ne "ALL" ) {
+        if ( $type eq "all" || $type eq "app" ) {
+        }
+    }
+}
+
+sub markRunningProServers() {
+    my @temp;
+    my $temp;
+    my $user;
+    my $domain;
+    if ( !$domain ) { $domain = ""; }
+    eval( @temp = findProcessServers("c") );
+    @servern = ();
+    foreach $temp (@temp) {
+        ( undef, $user, undef, undef, undef, $domain, undef ) =
+          split( '"', $temp );
+        $user = $user . $domain;
+        push @servern, $user;
+    }
+
+    #print @servern;
+    if ( $domain ne "ALL" ) {
+        if ( $type eq "all" || $type eq "pro" ) {
+        }
+    }
+}
+
+sub findAppServers {
+    my $i;
+    my $APPSERVER;
+    my $inv = shift @_;
+    my $uu  = "_u";
+    my $ui  = "_d";
+    my $up  = "_p";
+    my $uv  = "_v";
+    my $ver = "8.50";
+    my $userid;
+    $inv = $inv . "app";
+    my ( @returnArray, $ignor, $inst, $pid, $ps_cfg_home );
+    @APPSERVERS = `ps -ef | grep JSL | grep -v grep`;
+    $i          = 0;
+
+    foreach $APPSERVER (@APPSERVERS) {
+        chomp($APPSERVER);
+        $APPSERVER =~ s/\ +/ /g;
+        $APPSERVER =~ s/^ //g;
+        $APPSERVER =~ s/\ /,/g;
+        ( $userid, $pid, $ignor ) = split( /,/, $APPSERVER, 3 );
+        $inst = $ignor;
+        $inst =~ s/.*appserv\/(.*?)\/LOGS.*/$1/g;
+        $ps_cfg_home = $ignor;
+        $ps_cfg_home =~ s/.*-U,(.*LOG),.*/$1/;
+        $ps_cfg_home =~ s/(.*)appserv.*/$1/g;
+###### get version
+        @returnArray = (
+            @returnArray,
+"\$$inv$uu\[\$appi]=\"$userid\"; \$$inv$up\[\$appi]=\"$ps_cfg_home\"; \$$inv$ui\[\$appi]=\"$inst\" ; \$$inv$uv\[\$appi]=\"$ver\"; \$appi++; \n"
+        );
+        $i++;
+    }
+    return @returnArray;
+}
+
+sub findProcessServers {
+    my $i;
+    my $inv = shift @_;
+    my $uu  = "_u";
+    my $ui  = "_d";
+    my $up  = "_p";
+    my $uv  = "_v";
+    my $ver = "8.50";
+    $inv = $inv . "pro";
+    my ( @returnArray, $ignor, $inst, $ps_cfg_home, $userid, $pid );
+    my ( @PSERVERS, $PSERVER );
+    @PSERVERS = `ps -ef | grep BBL | grep PSUNX | grep -v grep`;
+    $i        = 0;
+
+    foreach $PSERVER (@PSERVERS) {
+        chomp($PSERVER);
+        $PSERVER =~ s/\ +/ /g;
+        $PSERVER =~ s/^ //g;
+        $PSERVER =~ s/\ /,/g;
+        ( $userid, $pid, $ignor ) = split( /,/, $PSERVER, 3 );
+        $inst = $ignor;
+
+        #print "$inst\n";
+        $inst =~ s/.*appserv\/prcs\/(.*)\/LOGS.*/$1/g;
+
+        #print "$inst\n";
+        $ps_cfg_home = $ignor;
+        $ps_cfg_home =~ s/.*-U,(.*LOG),.*/$1/g;
+        $ps_cfg_home =~ s/(.*)appserv.*/$1/g;
+##### getversion
+        @returnArray = (
+            @returnArray,
+"\$$inv$uu\[\$proi]=\"$userid\"; \$$inv$up\[\$proi]=\"$ps_cfg_home\"; \$$inv$ui\[\$proi]=\"$inst\" ; \$$inv$uv\[\$proi]=\"$ver\"; \$proi++; \n"
+        );
+        $i++;
+    }
+    return @returnArray;
+}
+
+sub findWebServers {
+    my $i;
+    my $inv = shift @_;
+    my $uu  = "_u";
+    my $ui  = "_d";
+    my $up  = "_p";
+    my $uv  = "_v";
+    my $ver = "8.50";
+    $inv = $inv . "web";
+    my ( @returnArray, $ignor, $inst, $ps_cfg_home, $userid, $pid );
+    my ( @WEBSERVERS, $WEBSERVER );
+    @WEBSERVERS = `ps -ef | grep weblogic.Name | grep -v grep`;
+    $i          = 0;
+
+    foreach $WEBSERVER (@WEBSERVERS) {
+        chomp($WEBSERVER);
+        $WEBSERVER =~ s/\ +/ /g;
+        $WEBSERVER =~ s/^ //g;
+        $WEBSERVER =~ s/\ /,/g;
+        ( $userid, $pid, $ignor ) = split( /,/, $WEBSERVER, 3 );
+        $inst    = $ignor;
+        $ps_cfg_home = $ignor;
+        $inst    =~ s/.*-Dweblogic.Name=(.*),.*/$1/g;
+        $inst    =~ s/,.*//g;
+        $ps_cfg_home =~ s/.*ps_cfg_home(.*),.*/$1/g;
+        $ps_cfg_home =~ s/,.*//g;
+        $ps_cfg_home =~ s/=//g;
+######  getversion
+        @returnArray = (
+            @returnArray,
+"\$$inv$uu\[\$webi]=\"$userid\"; \$$inv$ui\[\$webi]=\"$inst\"; \$$inv$up\[\$webi]=\"$ps_cfg_home\" ; \$$inv$uv\[\$web]=\"$ver\"; \$webi++; \n"
+        );
+        $i++;
+    }
+    return @returnArray;
+}
+
+sub startServerPub {
+    my $app;
+    my $i = 0;
+    print "----- $machine -----\n";
+    if ( $#app_u >= 0 ) {
+        print "Application Pub Servers:\n";
+        foreach $app (@app_u) {
+            if ( ( $app_d[$i] eq $domain ) || ( $domain eq 'ALL' ) ) {
+                print "  ---$app_d[$i]---\n";
+                    controlPub( $app_d[$i], $app_u[$i], $app_p[$i],'\'boot -g PUBSUB\'' );
+            }
+            $i++;
+        }
+    }
+}
+
+sub stopServerPub {
+    my $app;
+    my $i = 0;
+    print "----- $machine -----\n";
+    if ( $#app_u >= 0 ) {
+        print "Application Pub Servers:\n";
+        foreach $app (@app_u) {
+            if ( ( $app_d[$i] eq $domain ) || ( $domain eq 'ALL' ) ) {
+                print "  ---$app_d[$i]---\n";
+                    controlPub( $app_d[$i], $app_u[$i], $app_p[$i],'\'shutdown -g PUBSUB\'' );
+            }
+            $i++;
+        }
+    }
+}
+
+sub listQueue {
+    if ($nlflag) { exit; }
+    my $app;
+    my $i = 0;
+    print "----- $machine -----\n";
+    if ( $#app_u >= 0 ) {
+        print "Application Servers:\n";
+        foreach $app (@app_u) {
+            if ( ( $app_d[$i] eq $domain ) || ( $domain eq 'ALL' ) ) {
+                print "  ---$app_d[$i]---\n";
+                if ( $queuetype eq 'client' || $queuetype eq 'all' ) {
+                    queueStatusAppClient( $app_d[$i], $app_u[$i], $app_p[$i] );
+                }
+                if ( $queuetype eq 'server' || $queuetype eq 'all' ) {
+                    queueStatusAppServer( $app_d[$i], $app_u[$i], $app_p[$i] );
+                }
+                if ( $queuetype eq 'queue' || $queuetype eq 'all' ) {
+                    queueStatusAppQueue( $app_d[$i], $app_u[$i], $app_p[$i] );
+                }
+            }
+            $i++;
+        }
+    }
+}
+
+#
+#
+sub listServer {
+    if ($nlflag) { exit; }
+    my $app;
+    my $i = 0;
+    print "----- $machine -----\n";
+    if ( $#app_u >= 0 ) {
+        print "Application Servers:\n";
+        foreach $app (@app_u) {
+            print "    $app_d[$i]";
+            statusAppServer( $app_d[$i] );
+            statusJSLServer( $app_d[$i] );
+            $i++;
+        }
+    }
+    $i = 0;
+    if ( $#pro_u >= 0 ) {
+        print "Process Servers:\n";
+        foreach $app (@pro_u) {
+            print "     $pro_d[$i]";
+            statusProServer( $pro_d[$i], $pro_p[$i], $pro_u[$i] );
+            $i++;
+        }
+    }
+    $i = 0;
+    if ( $#web_u >= 0 ) {
+        print "Web Servers:\n";
+        foreach $app (@web_u) {
+            print "     $web_p[$i]";
+            statusWebServer( $web_d[$i], $web_p[$i] );
+            $i++;
+
+            # need web_d PIA to tell it is a web server
+        }
+    }
+    if ( ( $#web_u + $#pro_u + $#app_u + 3 ) == 0 ) {
+        print "No servers are found on this host!\n";
+    }
+}
+
+sub statusJSLServer {
+    my $server = shift @_;
+    $server = uc $server;
+
+    my $npcs = `ps -ef | grep "JSL -C dom=$server\_" | grep -v grep | wc -l`;
+
+#    my $npcs   = `ps -ef | grep $server | grep PSAPPSRV | grep -v grep | wc -l`;
+    chop $npcs;
+    if ( $npcs == 0 ) {
+        print " (JSL Not Running)\n";
+    }
+    else {
+        print " (JSL Running)\n";
+    }
+}
+
+sub controlTmadmin {
+
+    sub runCommandLocal {
+        my $command  = shift @_;
+        my $myresult = '';
+        if ($pflag) { print "Command to be executed is:\n$command\n"; }
+        else { $myresult = `$command`; }
+        return $myresult;
+    }
+    my $server    = shift @_;
+    my $user      = shift @_;
+    my $dir       = shift @_;
+    my $tmcommand = shift @_;
+    my $command   = "";
+    my $resultstr = "";
+    $command = startCommand($user);
+    $command = spliceStrings(
+        "",                          "",
+        $command,                    " . ",
+        $dir,                        "psconfig.sh; cd ",
+        $dir,                        "appserv/;  ",
+        "export TUXCONFIG=$dir",     "appserv/",
+        $server,                     "/PSTUXCFG; ",
+        "export PS_SERVER_CFG=$dir", "appserv/",
+        $server,                     "/psappsrv.cfg; ",
+        " echo $tmcommand | tmadmin -r 2>/dev/null \""
+    );
+    if ($vflag) { print $command; }
+
+    if ( 'true' eq okToRun( 'app', $server ) ) {
+        $resultstr = runCommandLocal($command);
+        $resultstr =~ s/>//g;
+        $resultstr =~ s/^\n//g;
+        print $resultstr;
+    }
+    print "\n";
+}
+sub controlTmadminPriv {
+# same as control tmadmin but gives administrator privileges
+    sub runCommandLocal {
+        my $command  = shift @_;
+        my $myresult = '';
+        if ($pflag) { print "Command to be executed is:\n$command\n"; }
+        else { $myresult = `$command`; }
+        return $myresult;
+    }
+    my $server    = shift @_;
+    my $user      = shift @_;
+    my $dir       = shift @_;
+    my $tmcommand = shift @_;
+    my $command   = "";
+    my $resultstr = "";
+    $command = startCommand($user);
+    $command = spliceStrings(
+        "",                          "",
+        $command,                    " . ",
+        $dir,                        "psconfig.sh; cd ",
+        $dir,                        "appserv/;  ",
+        "export TUXCONFIG=$dir",     "appserv/",
+        $server,                     "/PSTUXCFG; ",
+        "export PS_SERVER_CFG=$dir", "appserv/",
+        $server,                     "/psappsrv.cfg; ",
+        " echo $tmcommand | tmadmin \""
+    );
+    if ($vflag) { print $command; }
+
+    if ( 'true' eq okToRun( 'app', $server ) ) {
+        $resultstr = runCommandLocal($command);
+        $resultstr =~ s/>//g;
+        $resultstr =~ s/^\n//g;
+        print $resultstr;
+    }
+    print "\n";
+}
+
+sub controlPub {
+    my $server = shift @_;
+    my $user   = shift @_;
+    my $dir    = shift @_;
+    my $command = shift @_;
+    controlTmadminPriv( $server, $user, $dir, $command );
+}
+
+sub queueStatusAppClient {
+    my $server = shift @_;
+    my $user   = shift @_;
+    my $dir    = shift @_;
+    controlTmadmin( $server, $user, $dir, "pclt" );
+}
+
+sub queueStatusAppQueue {
+    my $server = shift @_;
+    my $user   = shift @_;
+    my $dir    = shift @_;
+    controlTmadmin( $server, $user, $dir, "pq" );
+}
+
+sub queueStatusAppServer {
+    my $server = shift @_;
+    my $user   = shift @_;
+    my $dir    = shift @_;
+    controlTmadmin( $server, $user, $dir, "psr" );
+}
+
+sub statusAppServer {
+    my $server = shift @_;
+    my $npcs   = `ps -ef | grep "$server" | grep PSAPPSRV | grep -v grep | wc -l`;
+    chop $npcs;
+    if ( $npcs == 0 ) {
+        print " Not Running";
+    }
+    else {
+        print " Running ($npcs processes )";
+    }
+}
+
+sub statusProServer {
+    my $server = shift @_;
+    my $pdir   = shift @_;
+    my $puser  = shift @_;
+    my $command;
+    my $npcs = `ps -ef | grep "$server\/" | grep PSPRCS | grep -v grep | wc -l`;
+    chop $npcs;
+    if ( $npcs == 0 ) {
+        print " Not Running\n";
+    }
+    else {
+        print " Running ($npcs processes )\n";
+    }
+    if ( defined $vflag ) {
+        $command = startCommand($puser);
+        $command = spliceStrings(
+            "", $command, " . ", $pdir, "psconfig.sh; cd ",
+            $pdir, "appserv/;  ./psadmin -p status -d ",
+            $server, " ; \" "
+        );
+        if ( 'true' eq okToRun( 'pro', $server ) ) {
+            runCommand($command);
+        }
+    }
+
+}
+
+sub statusWebServer {
+    my $server    = shift @_;
+    my $serverdir = shift @_;
+    my $npcs = `ps -ef | grep $server | grep "$serverdir " | grep -v grep | wc -l`;
+    chop $npcs;
+    if ( $npcs == 0 ) {
+        print " Not Running\n";
+    }
+    else {
+        print " Running ($npcs processes )\n";
+    }
+
+}
+
+sub statusServer {
+
+#     Author:  Bill Freeman
+#	Date:  4-25-2003
+#    Purpose:  Shows the PS App Servers and total memory for all PS for each domain
+#
+#    Supporting scripts:
+#
+#
+#  Global Variables
+#
+    my $application;
+    my ( $d2, $d );
+
+    my ( $psmemlist, $applmemlist );
+
+    my @RUNNING_APPS =
+`ps -ef | egrep 'JSL|PSPRCSRV|weblogic.name' | cut -d"=" -f2 -s | cut -d" " -f1 | sort -nr`;
+    chop(@RUNNING_APPS);
+    my $tmp = `date +%m%d%H%M%S`;
+
+#####  Show Header
+    print
+"Domain \t PSAPP  ResMem \t\t CPU% \t VM Size \t Mem% \t Domain ResMem \t CPU% \t VM Size \t Mem% \n";
+    print
+"_______\t\t_________\t_____\t_______\t\t____\t__________\t______\t_________\t_____\n";
+
+#####  Put all procs to a temp file
+    my $fh;
+    my $filename;
+    ( $fh, $filename ) = tempfile( "tmpfileXXXXX", DIR => "/tmp", UNLINK => 1 );
+    my $run = `ps gvw  > $filename`;
+
+#####  Go through domain list
+    foreach $application (@RUNNING_APPS) {
+#####  Initialize Paprameters
+        my $a      = 0;
+        my $a2     = 0;
+        my $b      = 0;
+        my $b2     = 0;
+        my $c      = 0;
+        my $c2     = 0;
+        my $x      = 0;
+        my $x2     = 0;
+        my $y      = 0;
+        my $y2     = 0;
+        my $z      = 0;
+        my $z2     = 0;
+        my $ma     = 0;
+        my $ma2    = 0;
+        my $mb     = 0;
+        my $mb2    = 0;
+        my $psmem  = 0;
+        my $appmem = 0;
+
+        $psmem = `cat $filename | grep -v grep | grep dom=${application} `;
+        my @MEMLIST = split( /\s+/, $psmem );
+        foreach $psmemlist (@MEMLIST) {
+            $a  = ${MEMLIST}[6];
+            $b  = ${MEMLIST}[7];
+            $c  = ${MEMLIST}[11];
+            $d  = ${MEMLIST}[12];
+            $x  = $x + ${a};
+            $y  = $y + ${b};
+            $z  = $z + ${c};
+            $ma = $x / 1024;
+            $mb = $y / 1024;
+        }
+        $appmem =
+`cat $filename | grep -v grep | grep PSAPPSRV | grep dom=${application} `;
+        close($fh);
+
+        my @MEMLIST2 = split( /\s+/, $appmem );
+        foreach $applmemlist (@MEMLIST2) {
+            $a2  = ${MEMLIST2}[6];
+            $b2  = ${MEMLIST2}[7];
+            $c2  = ${MEMLIST2}[11];
+            $d2  = ${MEMLIST}[12];
+            $x2  = ${x2} + ${a2};
+            $y2  = ${y2} + ${b2};
+            $z2  = ${z2} + ${c2};
+            $ma2 = ${x2} / 1024;
+            $mb2 = ${y2} / 1024;
+        }
+        printf
+"%6s \t\t%7.2f \t%3.2f \t%7.2f \t%3.2f \t%7.2f \t%3.2f \t%7.2f \t%3.2f \n",
+          ${application}, ${ma2}, ${z2}, ${mb2}, ${d2}, ${ma}, ${z}, ${mb},
+          ${d};
+    }
+}
+
+=pod
+
+=head1 NAME
+
+pscontrol
+
+=head1 SYNOPSIS
+
+pscontrol is a PERL script for controlling WebLogic and Tuxedo Servers. Type pscontrol --help for help.  pscontrol --man will give a full man page. 
+
+=head1 DESCRIPTION
+
+Control and displays processes on servers.
+
+=head1 ARGUMENTS
+
+--help --man 
+
+The following actions are allowed (all are mutually exclusive):
+
+=over
+
+--gencfg Command that is run originally to generate the configuration for that server.
+
+--stop Stop application, process, and/or webservers.
+
+--start Start application,process,and/or webservers.
+
+--restart Stop and start application, process, and webservers.
+
+--stoppub Stop pub servers.
+
+--startpub Start pub servers.
+
+--status Report the status of running servers.
+
+--list Lists the servers on a host and their status.
+
+--listqueue Lists the queues on a server.  Default is queue's.  Combine with --quetype for specific.
+
+--trace Sets a trace flag (requires --tracevalue, --tracetype, --domain --type).
+
+--version Display version information.
+
+=back
+
+=head1 OPTIONS
+
+--verbose Flag for enabling extra output.
+
+--domain B<(domain name)> Control a specific domain. This is required for stop, start, and restart.
+
+--prescript B<(filename)> Name of a program to execute before the action.
+
+--thread Flag for enabling multithreaded operation (non-concurrent).
+
+--wait Flag used with thread which causes the program to wait for threads to
+  finish to complete.
+
+--nocache Flag used not to remove cache (Cache removed by default).
+
+--nomaint Flag used not to disable/enable JSL Check (enable/disable is default)
+
+--force Flag used to force appserver down after --seconds seconds
+
+--seconds Time to wait to force an appserver down (default 10).  If second is set to 0, then the force option is the only option tried.
+
+--cleanipc Clean IPCS using the psadmin -cleanipc funcion.
+
+--parallel Parallel boot app server.
+
+--type B<(all,web,app,pro)> type of servers this action applies to.
+
+--queuetype B<(all,client,server,queue)> type of queues to list. 
+
+--postscript B<(filename)> Name of a program to execute after the action completes.
+
+--config B<(filename)> Name of the configuration file.
+
+--preview Does not execute the actual commands.
+
+--nolist Causes the list of the servers not to happen at the end.
+ 
+
+=head1 AUTHOR
+
+Phillip Padgett (pdp@ufl.edu)
+
+=head1 CREDITS
+
+Bill Freeman wrote the original status script (4-25-2003) which showed
+the PS App Servers and total memory for all PS for each domain.  It was
+modified so that webservers and process servers are also shown.
+
+=head1 TESTED
+
+1.0 2/4/2005
+1.1 1/16/2006
+1.101 1/23/2006 Uppercase all domains to simplify operation
+1.11  1/27/2006 Trace options added.
+1.50  2/11/2007 Various new features for 8.50.  Portability changes.
+
+=head1 BUGS/LIMITATIONS
+
+No specific bugs we know of.  The following know limitations exist:
+If $configdir/check-jsl.cfg-`uname` is not writable by the instance owner, then maintenance mode will fail.
+
+When using the force option, pscontrol does not check that all threads are down so it will execute force even if there are still no threads left.  This causes no problems.
+
+Since case sensitivity of domains and types was enabled, it is impossible to have more than one server with the same name but different case.  All server names are expected to be in uppercase as is our standard naming scheme.
+
+If "Allow Dynamic Updates" is not Y then  tracing will not work without restarting the server.  When a process server trace is turned off, the user must restart the process server.  Trace values are not checked for validity so it is possible to set a trace value which may not work or may cause the server not to start.
+
+=head1 UPDATES
+
+Version 1.1 Added updates for cache control, and jsl maintenance mode.  Servers as listed after a pscontrol call.  Server status was updated to check JSL server presence.  Problem was fixed where web servers could not be started and stopped individually. Force option was added.
+
+Version 1.101 Made domain and type options not case sensitive.
+
+Version 1.11 Added the trace option for setting traces.
+
+Version 1.2 Added listqueue option.  Fixed a problem with enabling and disabling jsl checking.
+
+Version 1.21 Requires domain option if action is not status.
+
+Version 1.22 Moved delete for force from the original sh command since it was never being executed.
+
+Version 1.23 Changed /usr/bin/uname to /bin/uname since both will work under AIX and /usr/bin/uname does not exist on RedHat Linux.  Changed the -W option to use warnings; and no warnings 'redefine' to stop a warning on Linux.
+
+Version 1.50 Added _v variables.  Changed boot to parallel boot for 8.50.  Added cleanipc toption.
+
+Version 1.51 Fixed for server names containing more than 5 characters.
+
+Version 1.52 Added option for stopping and starting only pub servers.
+
+=head1 General Documentation
+
+=over
+
+=item * Goal
+
+Design a generic script/set of scripts for starting and stopping web servers, application servers, and process schedulers.
+
+=item * Desired Characteristics
+
+Portable across servers no matter what the directory structure.
+
+	Command line driven.
+
+	Takes options on command line or in config file.
+
+	Command line overrides config file.
+
+	Reusable parts for other scripts.
+
+	Reasonable set of defaults to keep parameters to a minimum 
+
+		Current userid
+
+		All processes
+
+		All domains
+
+		No preprocess or postprocess file
+
+=item * Implementation
+
+	Language: PERL with ksh system calls with documentation in POD.
+
+=item * Performance
+
+Speed: The controlling factor in performance is waiting for the servers to stop since they may be active with a process at
+the time of the requested action.  Giving the option -thread increases the 
+performance.
+
+=item * Operation
+
+pscontrol -- (start, stop, restart, startpub, stoppub, trace, status, gencfg, list ,version) [--processes (all,app,pro,web)] [-- domain (name)] [-config (filename)] [-preprocess (preprocess file)] [- postprocess (postprocess file) [-thread ] [-wait] [-preview ] [--tracevalue (value) --tracetype (value)] [ --nocache] [--nomaint] [--nolist] [--cleanipc] 
+
+tracetype's may be LogFence, TraceSQL, TracePC, TracePPR, and DebuggerMsgLogEnable.
+
+=item * Functionality
+
+pscontrol functionality is permission based when starting and stopping domains.  For example if you are root and give a domain of all, every domain in the configuration file will be stopped or started.  However if you are a user with no special sudo privileges, you can only start and stop domains that you own.  If you have sudo privileges, you can control any domain that belongs to a user that
+you have sudo rights for.
+
+If you wish to set up multiple roles for stopping and starting domains, then you should create multiple configuration files.  These can be edited by hand to remove
+domain references which are not necessary.
+
+=item * Examples
+
+./pscontrol 
+
+=item * Configuration File Layout
+
+ $action="gencfg";  <--  Default command
+ $domain="all"; <-- Default domains to control
+ $configfile="$configdir/pscontrol.cfg-psXX";  <-- Default configuration file 
+ $thflag="1"; <-- threaded execution
+ $wflag="1"; <-- wait for thread to finish before next step
+ $vflag="1"; <-- verbose output
+ #
+ # The next sections are based on the server type.  
+ # If the array is app then it is an app server.  
+ # If the array is pro then it is a process server and
+ # if it is web then it is a web server.  
+ # The _u stands for the user owning the domain
+ # The _p stands for the peoplesoft directory
+ # The _d stands for the domainname.
+$appi=0; $proi=0; $webi=0;
+ $app_u[$appi]="pslab"; $app_p[$appi]="/psoft/hrlab/"; $app_d[$appi]="HRLAB"; $app_v[$appi]="8.50"; $appi++;
+ $app_u[$appi]="pslab"; $app_p[$appi]="/psoft/filab/"; $app_d[$appi]="FILAB"; $app_v[$appi]="8.47"; appi++;
+ $pro_u[$proi]="pslab"; $pro_p[$proi]="/psoft/filab/"; $pro_d[$proi]="pa"; $pro_v[$proi]="8.50"; $proi++;
+ $web_u[$webi]="pslab"; $web_p[$webi]="/psoft/hrlab/"; $web_d[$webi]="PIA"; $web_v[$webi]="8.50"; $webi++;
+
+The following is a complete example of one use of pscontrol.  First we list the servers to find the name, then type pscontrol to stop them and then type pscontrol to start back the one we want.
+
+pscontrol --list
+
+----- erp33 -----
+Web Servers:
+     /psoft/filab Running (       1 processes )
+     /psoft/palab Running (       1 processes )
+     /psoft/hrlab Running (       1 processes )
+
+Note that on the web servers the domain does not match the running process.  If you are not sure what the process is, then you can easily look in the configuration file in $configdir or look in the directory containing the process.  
+
+pscontrol --stop --domain FILAB
+... various shutdown messages ...
+
+pscontrol --list
+
+----- erp33 -----
+Web Servers:
+     /psoft/filab Not Running
+     /psoft/palab Running (       1 processes )
+     /psoft/hrlab Running (       1 processes )
+
+pscontrol --start --domain FILAB
+... various startup messages ...
+
+pscontrol --list
+
+----- erp33 -----
+Web Servers:
+     /psoft/filab Running (       1 processes )
+     /psoft/palab Running (       1 processes )
+     /psoft/hrlab Running (       1 processes )
+
+For example to stop appserver HRSMALL on a server, you could type:
+  pscontrol --stop --domain HRSMALL
+
+Other options are available for threading.  For example the same command
+pscontrol --start --domain FILAB --thread  will start the process but immediately return control to the console.  If you add --wait, it will wait for it to process before returning.
+
+A good use of this is
+pscontrol --restart --domain FILAB --thread --wait
+
+pscontrol --trace --tracetype LogFence --tracevalue 5 --domain FIDEV --type app 
+woud change the trace value on a server from the default of 3 to a value 
+of 5.  Note that domain and type are required for this option; ie., you can
+only do a single server at a time. 
+
+A customized generation file can be created by either copying the system one of using --gencfg and specifying a filename.  That can be edited for your use to allow you to set all of the common options you may use, such as always the same server or set of servers.  
+
+For example assuming you wanted to always stop filab and palab and start them at the same time, you could edit a configuration file and call it myconfig where it only contained those two servers.  Then you could create an alias such as
+alias stopmyservers "/usr/local/bin/pscontrol --config $HOME/myconfig --stop"
+alias startmyservers "/usr/local/bin/pscontrol --config $HOME/myconfig --stop"
+
+The could be in your .profile to make things more convenient for you.
+
+=item * Enhancements
+
+Possible future enhancements include -- emaililing results with time, etc for saving to a list or to allow operation in a cron.
+
+=item * Development
+
+Based on the stop and start scripts that already are present on erp33 and erp36.  
+
+psadmin starts and stops app server and process scheduler
+
+psadmin -help for info
+
+ps -ef | grep appserv locates the processed, etc.
+
+.pid identified the WL process.
+
+=back
+
+=cut
+
+

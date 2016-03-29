@@ -1,0 +1,17 @@
+# This configuration file is valid PERL which is eval'ed to load
+# the values into the software.  Command line parameters take precidence
+# over these values.  You can have multiple configuration files.
+#
+$action="gencfg";
+$domain="all";
+$configfile="/app_admin/scripts/utilities/pscontrol/config/pscontrol.cfg-qiepapp06";
+$type="all";
+$nmaflag="1";
+# Index for arrays initialized
+$proi = 0; $webi = 0; $appi= 0;
+$app_u[$appi]="ieptst"; $app_p[$appi]="/opt/pscfg/ieptst-8.54.07/"; $app_d[$appi]="ieptst" ; $app_v[$appi]="8.50"; $appi++; 
+$app_u[$appi]="ieptrn"; $app_p[$appi]="/opt/pscfg/ieptrn-8.54.07/"; $app_d[$appi]="ieptrn" ; $app_v[$appi]="8.50"; $appi++; 
+$app_u[$appi]="iepstg"; $app_p[$appi]="/opt/pscfg/iepstg-8.54.13/"; $app_d[$appi]="iepstg" ; $app_v[$appi]="8.50"; $appi++; 
+$pro_u[$proi]="ieptst"; $pro_p[$proi]="/opt/pscfg/ieptst-8.54.07/"; $pro_d[$proi]="ieptst" ; $pro_v[$proi]="8.50"; $proi++; 
+$pro_u[$proi]="ieptrn"; $pro_p[$proi]="/opt/pscfg/ieptrn-8.54.07/"; $pro_d[$proi]="ieptrn" ; $pro_v[$proi]="8.50"; $proi++; 
+$pro_u[$proi]="iepstg"; $pro_p[$proi]="/opt/pscfg/iepstg-8.54.13/"; $pro_d[$proi]="iepstg" ; $pro_v[$proi]="8.50"; $proi++; 

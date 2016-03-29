@@ -1,0 +1,12 @@
+# This configuration file is valid PERL which is eval'ed to load
+# the values into the software.  Command line parameters take precidence
+# over these values.  You can have multiple configuration files.
+#
+$action="gencfg";
+$domain="all";
+$configfile="/app_admin/scripts/utilities/pscontrol/config/pscontrol.cfg-dfinweb02";
+$type="all";
+$nmaflag="1";
+# Index for arrays initialized
+$proi = 0; $webi = 0; $appi= 0;
+$web_u[$webi]="findev"; $web_d[$webi]="findev"; $web_p[$webi]="/opt/pscfg/findev-8.54.13" ; $web_v[$webi]="8.50"; $webi++;

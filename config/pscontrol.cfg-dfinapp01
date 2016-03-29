@@ -1,0 +1,17 @@
+# This configuration file is valid PERL which is eval'ed to load
+# the values into the software.  Command line parameters take precidence
+# over these values.  You can have multiple configuration files.
+#
+$action="gencfg";
+$domain="all";
+$configfile="/app_admin/scripts/utilities/pscontrol/config/pscontrol.cfg-dfinapp01";
+$type="all";
+$nmaflag="1";
+# Index for arrays initialized
+$proi = 0; $webi = 0; $appi= 0;
+$app_u[$appi]="findmo"; $app_p[$appi]="/opt/pscfg/findmo-8.54.13/"; $app_d[$appi]="findmo" ; $app_v[$appi]="8.50"; $appi++; 
+$app_u[$appi]="findev"; $app_p[$appi]="/opt/pscfg/findev-8.54.13/"; $app_d[$appi]="findev" ; $app_v[$appi]="8.50"; $appi++; 
+$app_u[$appi]="finsp1"; $app_p[$appi]="/opt/pscfg/finsp1-8.54.13/"; $app_d[$appi]="finsp1" ; $app_v[$appi]="8.50"; $appi++; 
+$pro_u[$proi]="findmo"; $pro_p[$proi]="/opt/pscfg/findmo-8.54.13/"; $pro_d[$proi]="findmo" ; $pro_v[$proi]="8.50"; $proi++; 
+$pro_u[$proi]="findev"; $pro_p[$proi]="/opt/pscfg/findev-8.54.13/"; $pro_d[$proi]="findev" ; $pro_v[$proi]="8.50"; $proi++; 
+$pro_u[$proi]="finsp1"; $pro_p[$proi]="/opt/pscfg/finsp1-8.54.13/"; $pro_d[$proi]="finsp1" ; $pro_v[$proi]="8.50"; $proi++; 
