@@ -6,6 +6,7 @@ use File::Temp qw/ tempfile /;
 use Sys::Syslog;
 use Getopt::Long;
 use Pod::Usage;
+#use Devel::Trace;
 use Thread;
 
 $| = 1;
