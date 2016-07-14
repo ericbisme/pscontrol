@@ -7,6 +7,7 @@ use Sys::Syslog;
 use Getopt::Long;
 use Pod::Usage;
 #use Devel::Trace;
+use Data::Dumper;
 use Thread;
 
 $| = 1;
@@ -35,7 +36,7 @@ $queuetype  = 'queue';
 $tracevalue = "N/A";
 our $threadcount;
 our $tempname = `echo temp$$`;
-our $machine  = `uname -n`;
+our $machine  = `hostname -s`;
 chop $machine;
 $VERSION        = "1.52 5/7/2009";
 $seconds        = 30;
@@ -593,6 +594,8 @@ sub startServer {
     my $exist;
     my $possiblefile = "";
     my $bootcommand; 
+    my $configure="true";
+
     print "Starting servers in domain:$domain\n";
 
     #
@@ -608,11 +611,13 @@ sub startServer {
         if ( $app ne "" ) {
             $command = startCommand( $app_u[$i] );
             if ($app_v[$i] eq "8.50" && defined $parflag ) { $bootcommand="parallelboot"; } else {$bootcommand="boot"; }
+            if ($conflag && $app_v[$i] eq "8.50") { $configure="psadmin -c configure -d "; }
             $command = spliceStrings(
                 "",         "",
-                #$command,   " . ",
-                #$app_p[$i], "psconfig.sh; cd ",
-                $command, "psadmin -c $bootcommand -d ",
+                $command ,
+                $configure ,
+                $app_d[$i], " ; ",
+                "psadmin -c $bootcommand -d ",
                 $app_d[$i], " ; \" "
             );
             if ( 'true' eq okToRun( 'app', $app_d[$i] ) ) {
@@ -1027,14 +1032,19 @@ sub findWebServers {
         $WEBSERVER =~ s/^ //g;
         $WEBSERVER =~ s/\ /,/g;
         ( $userid, $pid, $ignor ) = split( /,/, $WEBSERVER, 3 );
-        $inst    = $ignor;
+
         $ps_cfg_home = $ignor;
-        $inst    =  (split /,/, $inst)[13];
-        $inst    =  (split '/', $inst)[5];
-        $ps_cfg_home =  (split /,/, $ps_cfg_home)[13];
+        $ps_cfg_home =~ m/(,-Djava\.util\.logging\.config\.file=.*?,)/ ;
+        $ps_cfg_home =  $1;
         $ps_cfg_home =  (split '=', $ps_cfg_home)[1];
+
         @dirarray   =  (split '/', $ps_cfg_home);
+
         $ps_cfg_home =  "/" . $dirarray[1] . "/" . $dirarray[2] . "/" . $dirarray[3] ;
+
+        $inst    = $ignor;
+        $inst    =  (split /-/, $dirarray[3])[0];
+
 ######  getversion
         @returnArray = (
             @returnArray,
@@ -1042,6 +1052,36 @@ sub findWebServers {
         );
         $i++;
     }
+
+########TESTING
+#        @WEBSERVERS = `ps -ef | grep weblogic.Name | grep -v grep |grep -v olm`;
+        @WEBSERVERS = `ps -ef`;
+	#my @ps =`$command`;
+        my $id = "PID";
+
+	$WEBSERVERS[0] =~ s/^\s*//;
+	my @header = split /\s+/, shift @WEBSERVERS;
+	my ($posid) = grep { $header[$_] eq $id } 0..$#header;
+	die "$id: No such column!\n" unless defined( $posid );
+	splice @header, $posid, 1;
+
+	my %psdata;
+	while( @WEBSERVERS ) {
+	  my $row = shift @WEBSERVERS;
+	    chomp $row;
+	  $row =~ s/^\s*//;
+	  my @row = split /\s+/, $row, $#header+2;
+	  my $this_id = splice @row, $posid, 1;
+	  @{$psdata{$this_id}}{@header} = @row;
+	}
+#        print Dumper( %psdata );
+
+#        @returnArray = (
+#            @returnArray,
+#"\$$inv$uu\[\$webi]=\"$userid\"; \$$inv$ui\[\$webi]=\"$inst\"; \$$inv$up\[\$webi]=\"$ps_cfg_home\" ; \$$inv$uv\[\$webi]=\"$ver\"; \$webi++; \n"
+#        );
+########TESTING
+
     return @returnArray;
 }
 
@@ -1478,7 +1518,7 @@ The following actions are allowed (all are mutually exclusive):
 
 --preload Preload Application Server Cache using psadmin -preload funcion upon shutdown.
 
---configure Reload Applicaiton Server Configuration using the psadmin -configure funcion upon shutdown.
+--configure Reload Application Server Configuration using the psadmin -configure function upon shutdown.
 
 --parallel Parallel boot app server.
 
