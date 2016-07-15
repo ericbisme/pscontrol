@@ -101,12 +101,13 @@ if ( $action eq "stop" || $action eq "restart" && !$nlflag ) {
     listServer();
 }
 if ( $postscript && !$pflag ) { system($postscript); }
+
 sub logCommand {
- my $command=shift @_;
- my $user=getUser();
- openlog( "PSCONTROL", 'user' );
- syslog( 'info', "User $user ran pscontrol $command" );
- closelog();
+   my $command=shift @_;
+   my $user=getUser();
+   openlog( "PSCONTROL", 'user' );
+   syslog( 'info', "User $user ran pscontrol $command" );
+   closelog();
 }
 sub killHungTmshutdown {
 
@@ -116,8 +117,7 @@ sub killHungTmshutdown {
     my $command  = startCommand($myuser);
     my $wholecommand;
     my $pid =
-      `ps -e -o '%p,%a' | grep tmshutdown | grep -v grep | sed -e 's/ *//g' | 
-cut -d, -f1 | tail -1`;
+        `ps -e -o '%p,%a' | grep tmshutdown | grep -v grep | sed -e 's/ *//g' | cut -d, -f1 | tail -1`;
     if ( $pid && $pid > 1000 ) {
         chop $pid;
         print "pid of tmsshutdown is $pid\n";
@@ -161,8 +161,7 @@ sub setTrace {
             $i = 0;
             foreach $app (@app_u) {
                 if ( $app ne "" && $app_d[$i] eq $domain ) {
-                    $cmddir =
-                      $app_p[$i] . "appserv/" . $app_d[$i] . "/psappsrv.cfg";
+                    $cmddir = $app_p[$i] . "appserv/" . $app_d[$i] . "/psappsrv.cfg";
                 }
                 $i++;
             }
@@ -600,7 +599,7 @@ sub startServer {
     my $justname;
     my $exist;
     my $possiblefile = "";
-    my $bootcommand; 
+    my $bootcommand;
     my $configure="true";
 
     print "Starting servers in domain:$domain\n";
@@ -657,8 +656,11 @@ sub startServer {
             $web_p[$i] =~ s/=//g;
 
             $command = spliceStrings(
-                "", $command, " psadmin -w start -d ",
-                $web_d[$i], " ; \" "
+                "", $command,
+                ' $PS_CFG_HOME/webserv/',
+                $web_d[$i], 
+                '/bin/startPIA.sh',
+                " ; \" "
             );
 
             if ( 'true' eq okToRun( 'web', $web_d[$i], $justname ) ) {
@@ -666,11 +668,11 @@ sub startServer {
             }
         }
         $i++;
-    }
+
 }
 
 sub compileCobol {
-   
+
     # source profile
     # ${PS_HOME}/setup/pscbl.mak ${PS_CUST_HOME}
 
@@ -802,7 +804,7 @@ sub stopServer {
                     $app_d[$i], " ; $ipcclean $app_d[$i] ; $cachermcommand",
                     $app_p[$i], "appserv/",
                     $app_d[$i], "/CACHE/* ",
-                    $killstr,  
+                    $killstr,
                     " ; $configure $app_d[$i]",
                     " ; $preload $app_d[$i]",  "\""
                 );
@@ -1063,24 +1065,24 @@ sub findWebServers {
 ########TESTING
 #        @WEBSERVERS = `ps -ef | grep weblogic.Name | grep -v grep |grep -v olm`;
         @WEBSERVERS = `ps -ef`;
-	#my @ps =`$command`;
+    #my @ps =`$command`;
         my $id = "PID";
 
-	$WEBSERVERS[0] =~ s/^\s*//;
-	my @header = split /\s+/, shift @WEBSERVERS;
-	my ($posid) = grep { $header[$_] eq $id } 0..$#header;
-	die "$id: No such column!\n" unless defined( $posid );
-	splice @header, $posid, 1;
+    $WEBSERVERS[0] =~ s/^\s*//;
+    my @header = split /\s+/, shift @WEBSERVERS;
+    my ($posid) = grep { $header[$_] eq $id } 0..$#header;
+    die "$id: No such column!\n" unless defined( $posid );
+    splice @header, $posid, 1;
 
-	my %psdata;
-	while( @WEBSERVERS ) {
-	  my $row = shift @WEBSERVERS;
-	    chomp $row;
-	  $row =~ s/^\s*//;
-	  my @row = split /\s+/, $row, $#header+2;
-	  my $this_id = splice @row, $posid, 1;
-	  @{$psdata{$this_id}}{@header} = @row;
-	}
+    my %psdata;
+    while( @WEBSERVERS ) {
+      my $row = shift @WEBSERVERS;
+        chomp $row;
+      $row =~ s/^\s*//;
+      my @row = split /\s+/, $row, $#header+2;
+      my $this_id = splice @row, $posid, 1;
+      @{$psdata{$this_id}}{@header} = @row;
+    }
 #        print Dumper( %psdata );
 
 #        @returnArray = (
@@ -1366,7 +1368,7 @@ sub statusWebServer {
 sub statusServer {
 
 #     Author:  Bill Freeman
-#	Date:  4-25-2003
+#   Date:  4-25-2003
 #    Purpose:  Shows the PS App Servers and total memory for all PS for each domain
 #
 #    Supporting scripts:
@@ -1462,7 +1464,7 @@ pscontrol
 
 =head1 SYNOPSIS
 
-pscontrol is a PERL script for controlling WebLogic and Tuxedo Servers. Type pscontrol --help for help.  pscontrol --man will give a full man page. 
+pscontrol is a PERL script for controlling WebLogic and Tuxedo Servers. Type pscontrol --help for help.  pscontrol --man will give a full man page.
 
 =head1 DESCRIPTION
 
@@ -1470,7 +1472,7 @@ Control and displays processes on servers.
 
 =head1 ARGUMENTS
 
---help --man 
+--help --man
 
 The following actions are allowed (all are mutually exclusive):
 
@@ -1531,7 +1533,7 @@ The following actions are allowed (all are mutually exclusive):
 
 --type B<(all,web,app,pro)> type of servers this action applies to.
 
---queuetype B<(all,client,server,queue)> type of queues to list. 
+--queuetype B<(all,client,server,queue)> type of queues to list.
 
 --postscript B<(filename)> Name of a program to execute after the action completes.
 
@@ -1540,7 +1542,7 @@ The following actions are allowed (all are mutually exclusive):
 --preview Does not execute the actual commands.
 
 --nolist Causes the list of the servers not to happen at the end.
- 
+
 
 =head1 AUTHOR
 
@@ -1605,37 +1607,37 @@ Design a generic script/set of scripts for starting and stopping web servers, ap
 
 Portable across servers no matter what the directory structure.
 
-	Command line driven.
+    Command line driven.
 
-	Takes options on command line or in config file.
+    Takes options on command line or in config file.
 
-	Command line overrides config file.
+    Command line overrides config file.
 
-	Reusable parts for other scripts.
+    Reusable parts for other scripts.
 
-	Reasonable set of defaults to keep parameters to a minimum 
+    Reasonable set of defaults to keep parameters to a minimum
 
-		Current userid
+        Current userid
 
-		All processes
+        All processes
 
-		All domains
+        All domains
 
-		No preprocess or postprocess file
+        No preprocess or postprocess file
 
 =item * Implementation
 
-	Language: PERL with ksh system calls with documentation in POD.
+    Language: PERL with ksh system calls with documentation in POD.
 
 =item * Performance
 
 Speed: The controlling factor in performance is waiting for the servers to stop since they may be active with a process at
-the time of the requested action.  Giving the option -thread increases the 
+the time of the requested action.  Giving the option -thread increases the
 performance.
 
 =item * Operation
 
-pscontrol -- (start, stop, restart, startpub, stoppub, trace, status, gencfg, list ,version) [--processes (all,app,pro,web)] [-- domain (name)] [-config (filename)] [-preprocess (preprocess file)] [- postprocess (postprocess file) [-thread ] [-wait] [-preview ] [--tracevalue (value) --tracetype (value)] [ --nocache] [--nomaint] [--nolist] [--cleanipc] 
+pscontrol -- (start, stop, restart, startpub, stoppub, trace, status, gencfg, list ,version) [--processes (all,app,pro,web)] [-- domain (name)] [-config (filename)] [-preprocess (preprocess file)] [- postprocess (postprocess file) [-thread ] [-wait] [-preview ] [--tracevalue (value) --tracetype (value)] [ --nocache] [--nomaint] [--nolist] [--cleanipc]
 
 tracetype's may be LogFence, TraceSQL, TracePC, TracePPR, and DebuggerMsgLogEnable.
 
@@ -1649,21 +1651,21 @@ domain references which are not necessary.
 
 =item * Examples
 
-./pscontrol 
+./pscontrol
 
 =item * Configuration File Layout
 
  $action="gencfg";  <--  Default command
  $domain="all"; <-- Default domains to control
- $configfile="$configdir/pscontrol.cfg-psXX";  <-- Default configuration file 
+ $configfile="$configdir/pscontrol.cfg-psXX";  <-- Default configuration file
  $thflag="1"; <-- threaded execution
  $wflag="1"; <-- wait for thread to finish before next step
  $vflag="1"; <-- verbose output
  #
- # The next sections are based on the server type.  
- # If the array is app then it is an app server.  
+ # The next sections are based on the server type.
+ # If the array is app then it is an app server.
  # If the array is pro then it is a process server and
- # if it is web then it is a web server.  
+ # if it is web then it is a web server.
  # The _u stands for the user owning the domain
  # The _p stands for the peoplesoft directory
  # The _d stands for the domainname.
@@ -1683,7 +1685,7 @@ Web Servers:
      /psoft/palab Running (       1 processes )
      /psoft/hrlab Running (       1 processes )
 
-Note that on the web servers the domain does not match the running process.  If you are not sure what the process is, then you can easily look in the configuration file in $configdir or look in the directory containing the process.  
+Note that on the web servers the domain does not match the running process.  If you are not sure what the process is, then you can easily look in the configuration file in $configdir or look in the directory containing the process.
 
 pscontrol --stop --domain FILAB
 ... various shutdown messages ...
@@ -1716,12 +1718,12 @@ pscontrol --start --domain FILAB --thread  will start the process but immediatel
 A good use of this is
 pscontrol --restart --domain FILAB --thread --wait
 
-pscontrol --trace --tracetype LogFence --tracevalue 5 --domain FIDEV --type app 
-woud change the trace value on a server from the default of 3 to a value 
+pscontrol --trace --tracetype LogFence --tracevalue 5 --domain FIDEV --type app
+woud change the trace value on a server from the default of 3 to a value
 of 5.  Note that domain and type are required for this option; ie., you can
-only do a single server at a time. 
+only do a single server at a time.
 
-A customized generation file can be created by either copying the system one of using --gencfg and specifying a filename.  That can be edited for your use to allow you to set all of the common options you may use, such as always the same server or set of servers.  
+A customized generation file can be created by either copying the system one of using --gencfg and specifying a filename.  That can be edited for your use to allow you to set all of the common options you may use, such as always the same server or set of servers.
 
 For example assuming you wanted to always stop filab and palab and start them at the same time, you could edit a configuration file and call it myconfig where it only contained those two servers.  Then you could create an alias such as
 alias stopmyservers "/usr/local/bin/pscontrol --config $HOME/myconfig --stop"
@@ -1735,7 +1737,7 @@ Possible future enhancements include -- emaililing results with time, etc for sa
 
 =item * Development
 
-Based on the stop and start scripts that already are present on erp33 and erp36.  
+Based on the stop and start scripts that already are present on erp33 and erp36.
 
 psadmin starts and stops app server and process scheduler
 
