@@ -6,8 +6,9 @@ use File::Temp qw/ tempfile /;
 use Sys::Syslog;
 use Getopt::Long;
 use Pod::Usage;
+use File::Basename;
 #use Devel::Trace;
-use Data::Dumper;
+#use Data::Dumper;
 use Thread;
 
 $| = 1;
@@ -31,7 +32,6 @@ our $proi;
 our $webi;
 our $appi;
 our $cachermcommand;
-our $configdir;
 $queuetype  = 'queue';
 $tracevalue = "N/A";
 our $threadcount;
@@ -42,7 +42,12 @@ $VERSION        = "1.52 5/7/2009";
 $seconds        = 30;
 $actcount       = 0;
 $cachermcommand = "rm -rf ";
-$configdir= "/app_admin/scripts/utilities/pscontrol/config";
+
+#Define Configuration directory
+our $configdir;
+my($pscontrol_filename, $pscontrol_dirs, $pscontrol_suffix) = fileparse($0);
+chop($pscontrol_dirs);
+$configdir = "$pscontrol_dirs/config";
 
 if ( existFile("$configdir/check_jsl-$machine") eq 'nofile' ) {
     $nmaflag = 1;
