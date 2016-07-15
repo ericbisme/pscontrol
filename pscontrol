@@ -656,6 +656,8 @@ sub startServer {
                 " ; \" "
             );
 
+            $command =~ s/"/'/g; #EAB - Silly, but for this particular command single quotes required for ENV variable usage
+
             if ( 'true' eq okToRun( 'web', $web_d[$i], $justname ) ) {
                 runCommand($command);
             }
