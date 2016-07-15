@@ -856,10 +856,17 @@ sub stopServer {
                 $justname = $web_d[$i];
 
                 $command = spliceStrings(
-                    $command, "psadmin -w shutdown -d ", $web_d[$i], " ; $cachermcommand",
+                    "", $command,
+                    ' $PS_CFG_HOME/webserv/',
+                    "$web_d[$i]",
+                    '/bin/stopPIA.sh',
+                    " ; $cachermcommand",
                     $web_p[$i], "/webserv/",
                     $web_d[$i], "/applications/peoplesoft/PORTAL.war/*/cache/* \" "
+                    " ; \" "
                 );
+
+                $command =~ s/"/'/g; #EAB - Silly, but for this particular command single quotes required for ENV variable usage
 
                 if ( 'true' eq okToRun( 'web', $web_d[$i], $justname ) ) {
                     runCommand($command);
