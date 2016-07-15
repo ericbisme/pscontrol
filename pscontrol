@@ -395,8 +395,6 @@ sub setDefaults() {
     if ( !$delay )    { $delay    = 0; }
 }
 
-#
-#
 sub getFileOptions() {
     readConfig();
 }
@@ -449,10 +447,7 @@ sub nullArrays() {
     $#web_u = -1;
 }
 
-#
-#
 sub processOptions {
-
     #
     # Subroutine for Setting/getting program options
     #
@@ -516,8 +511,6 @@ sub processOptions {
     pod2usage( -verbose => 0 ) && exit if $actcount == 0;
 }
 
-#
-#
 sub startCommand {
 
     sub getShell {
@@ -658,7 +651,7 @@ sub startServer {
             $command = spliceStrings(
                 "", $command,
                 ' $PS_CFG_HOME/webserv/',
-                $web_d[$i], 
+                "$web_d[$i]",
                 '/bin/startPIA.sh',
                 " ; \" "
             );
@@ -668,7 +661,7 @@ sub startServer {
             }
         }
         $i++;
-
+    }
 }
 
 sub compileCobol {
@@ -1054,7 +1047,6 @@ sub findWebServers {
         $inst    = $ignor;
         $inst    =  (split /-/, $dirarray[3])[0];
 
-######  getversion
         @returnArray = (
             @returnArray,
 "\$$inv$uu\[\$webi]=\"$userid\"; \$$inv$ui\[\$webi]=\"$inst\"; \$$inv$up\[\$webi]=\"$ps_cfg_home\" ; \$$inv$uv\[\$webi]=\"$ver\"; \$webi++; \n"
@@ -1062,11 +1054,8 @@ sub findWebServers {
         $i++;
     }
 
-########TESTING
-#        @WEBSERVERS = `ps -ef | grep weblogic.Name | grep -v grep |grep -v olm`;
-        @WEBSERVERS = `ps -ef`;
-    #my @ps =`$command`;
-        my $id = "PID";
+    @WEBSERVERS = `ps -ef`;
+    my $id = "PID";
 
     $WEBSERVERS[0] =~ s/^\s*//;
     my @header = split /\s+/, shift @WEBSERVERS;
@@ -1083,13 +1072,6 @@ sub findWebServers {
       my $this_id = splice @row, $posid, 1;
       @{$psdata{$this_id}}{@header} = @row;
     }
-#        print Dumper( %psdata );
-
-#        @returnArray = (
-#            @returnArray,
-#"\$$inv$uu\[\$webi]=\"$userid\"; \$$inv$ui\[\$webi]=\"$inst\"; \$$inv$up\[\$webi]=\"$ps_cfg_home\" ; \$$inv$uv\[\$webi]=\"$ver\"; \$webi++; \n"
-#        );
-########TESTING
 
     return @returnArray;
 }
@@ -1750,5 +1732,3 @@ ps -ef | grep appserv locates the processed, etc.
 =back
 
 =cut
-
-
