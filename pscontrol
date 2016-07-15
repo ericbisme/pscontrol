@@ -45,7 +45,7 @@ $cachermcommand = "rm -rf ";
 
 #Define Configuration directory
 our $configdir;
-my($pscontrol_filename, $pscontrol_dirs, $pscontrol_suffix) = fileparse($0);
+my($pscontrol_filename, $pscontrol_dirs, $pscontrol_suffix) = readlink "/usr/local/bin/pscontrol";
 chop($pscontrol_dirs);
 $configdir = "$pscontrol_dirs/config";
 
