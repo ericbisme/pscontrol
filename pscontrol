@@ -862,7 +862,7 @@ sub stopServer {
                     '/bin/stopPIA.sh',
                     " ; $cachermcommand",
                     $web_p[$i], "/webserv/",
-                    $web_d[$i], "/applications/peoplesoft/PORTAL.war/*/cache/* \" "
+                    $web_d[$i], "/applications/peoplesoft/PORTAL.war/*/cache/* \" ",
                     " ; \" "
                 );
 
