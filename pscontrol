@@ -614,9 +614,9 @@ sub startServer {
             if ($conflag && $app_v[$i] eq "8.50") { $configure="psadmin -c configure -d "; }
             $command = spliceStrings(
                 "",         "",
-                $command ,
-                $configure ,
-                $app_d[$i], " ; ",
+                $command,
+                $configure,
+                " ", $app_d[$i], " ; ",
                 "psadmin -c $bootcommand -d ",
                 $app_d[$i], " ; \" "
             );
