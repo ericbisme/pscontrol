@@ -48,7 +48,7 @@ our $configdir;
 my $pscontrol_link = readlink "/usr/local/bin/pscontrol";
 my($pscontrol_filename, $pscontrol_dirs, $pscontrol_suffix) = fileparse($pscontrol_link);
 chop($pscontrol_dirs);
-$configdir = "$pscontrol_dirs/config";
+$configdir = '/etc/pscontrol';
 mkdir $configdir unless -d $configdir;
 
 if ( existFile("$configdir/check_jsl-$machine") eq 'nofile' ) {
