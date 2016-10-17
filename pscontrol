@@ -391,8 +391,7 @@ sub setDefaults() {
     if ( !$type )       { $type       = "all"; }
     if ( !$configfile ) { $configfile = $DefConfigFile; }
 
-    #    if ( !$seconds )    { $seconds    = 30; }
-    if ( !$delay )    { $delay    = 0; }
+    if ( !$delay ) { $delay = 0; }
 }
 
 sub getFileOptions() {
