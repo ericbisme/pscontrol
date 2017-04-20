@@ -216,7 +216,7 @@ sub maintenance {
 "`echo \"/$ldomain\ns/$oldv/$newv/g\nw\nq\n\" | /bin/ed $configdir/check_jsl-$machine`\n";
         }
         else {
-`echo "/$ldomain\ns/$oldv/$newv/g\nw\nq\n" | /bin/ed $configdir/config/check_jsl-$machine`;
+`echo "/$ldomain\ns/$oldv/$newv/g\nw\nq\n" | /bin/ed $configdir/check_jsl-$machine`;
         }
     }
 }
