@@ -210,15 +210,14 @@ sub maintenance {
     my $ldomain = shift @_;
     my $oldv    = shift @_;
     my $newv    = shift @_;
-    if ( !$nmaflag ) {
+    #if ( !$nmaflag ) {
         if ($pflag) {
-            print
-"`echo \"/$ldomain\ns/$oldv/$newv/g\nw\nq\n\" | /bin/ed $configdir/check_jsl-$machine`\n";
+            print "`sed -i \"/^$ldomain/s/[^ ]*[^ ]/$newv/2\" $configdir/check_jsl-$machine`\n";
         }
         else {
-`echo "/$ldomain\ns/$oldv/$newv/g\nw\nq\n" | /bin/ed $configdir/check_jsl-$machine`;
+            `sed -i "/^$ldomain/s/[^ ]*[^ ]/$newv/2" $configdir/check_jsl-$machine`;
         }
-    }
+    #}
 }
 
 sub beginMaintenance {
@@ -1330,7 +1329,7 @@ sub statusProServer {
     if ( defined $vflag ) {
         $command = startCommand($puser);
         $command = spliceStrings(
-            "", $command, " . ", $pdir, "psconfig.sh; cd ",
+            "", $command, "cd ",
             $pdir, "appserv/;  psadmin -p status -d ",
             $server, " ; \" "
         );
