@@ -1343,7 +1343,7 @@ sub statusProServer {
 sub statusWebServer {
     my $server    = shift @_;
     my $serverdir = shift @_;
-    my $npcs = `ps -ef | grep $server | grep "$serverdir" | grep -v grep | grep -v olm| wc -l`;
+    my $npcs = `ps -ef | grep $server | grep "$serverdir" | grep java | grep -v grep | grep -v olm| wc -l`;
     chop $npcs;
     if ( $npcs == 0 ) {
         print " Not Running\n";
