@@ -1162,7 +1162,7 @@ sub listServer {
         print "Application Servers:\n";
         foreach $app (@app_u) {
             print "    $app_d[$i]";
-            print $psadmin_ret_xlat{ statusDomain( $app_d[$i], $app_p[$i], $app_u[$i], 'c' ) } ;
+            print $psadmin_ret_xlat{ statusDomain( $app_d[$i], $app_p[$i], $app_u[$i], 'c' ) } || $psadmin_ret_xlat{default};
             $i++;
         }
     }
@@ -1171,7 +1171,7 @@ sub listServer {
         print "Process Servers:\n";
         foreach $app (@pro_u) {
             print "    $pro_d[$i]";
-            print $psadmin_ret_xlat{ statusDomain( $pro_d[$i], $pro_p[$i], $pro_u[$i], 'p' ) } ;
+            print $psadmin_ret_xlat{ statusDomain( $pro_d[$i], $pro_p[$i], $pro_u[$i], 'p' ) } || $psadmin_ret_xlat{default};
             $i++;
         }
     }
@@ -1180,7 +1180,7 @@ sub listServer {
         print "Web Servers:\n";
         foreach $app (@web_u) {
             print "    $web_d[$i]";
-            print $psadmin_ret_xlat{ statusDomain( $web_d[$i], $web_p[$i], $web_u[$i], 'w' ) } ;
+            print $psadmin_ret_xlat{ statusDomain( $web_d[$i], $web_p[$i], $web_u[$i], 'w' ) } || $psadmin_ret_xlat{default};
             $i++;
 
             # need web_d PIA to tell it is a web server
