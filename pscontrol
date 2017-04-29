@@ -1352,6 +1352,39 @@ sub statusWebServer {
     return $? >> 8;
 }
 
+sub statusDomain{
+    my $domainname = shift @_;
+    my $domaindir  = shift @_;
+    my $domainuser = shift @_;
+    my $domaintype = shift @_;
+
+    $command = startCommand($domainuser);
+    $command = spliceStrings(
+        "", $command, "cd ",
+        $domaindir, "appserv/;  psadmin -$domaintype status -d ",
+        $domainname, " ; \" "
+    );
+    if ( 'true' eq okToRun( 'pro', $server ) ) {
+        runCommand($command);
+    }
+
+    system("psadmin -$servertype status -d $server &> /dev/null");
+
+    if ( $? == -1 ) {
+        print " psadmin failed to execute\n";
+    }
+    elsif (($? >> 8) == 4) {
+        print " Stopped\n";
+    }
+    elsif (($? >> 8) == 5) {
+        print " Running\n";
+    }
+    else {
+        printf " Unknown exit: ", ($? >> 8);
+    }
+    return $? >> 8;
+}
+
 sub statusServer {
 
 #     Author:  Bill Freeman
