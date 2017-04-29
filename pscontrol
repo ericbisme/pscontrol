@@ -852,8 +852,6 @@ sub stopServer {
                 $justname = $web_d[$i];
 
                 $command = spliceStrings(
-                    "", $command,
-                    ' $PS_CFG_HOME/webserv/',
                     $command, " psadmin -w shutdown! -d ",
                     $web_d[$i], " ; $cachermcommand",
                     $web_p[$i], "/webserv/",
