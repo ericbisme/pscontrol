@@ -29,11 +29,11 @@ our (
 
 # psadmin return code translation hash
 our %psadmin_ret_xlat =(
-    -1      => " psadmin failed to execute\n",
-    0       => " Success, generic 0\n",
-    4       => " Stopped\n",
-    5       => " Running\n",
-    default => " Exit code undefined in psadmin_ret_xlat\n"
+    -1      => "psadmin failed to execute",
+    0       => "Success, generic 0",
+    4       => "Stopped",
+    5       => "Running",
+    default => "Exit code undefined in psadmin_ret_xlat"
 );
 
 my $commandline=join(' ',@ARGV);
@@ -618,7 +618,7 @@ sub startServer {
     $threadcount = 0;
     $#mythreads  = -1;
     foreach $app (@app_u) {
-        if ( $app ne "" ) {
+        if ( $app ne "" && 'Running' ne $psadmin_ret_xlat{ statusDomain( $app_d[$i], $app_p[$i], $app_u[$i], 'c' ) }) {
             $command = startCommand( $app_u[$i] );
             if ($app_v[$i] eq "8.50" && defined $parflag ) { $bootcommand="parallelboot"; } else {$bootcommand="boot"; }
             if ($conflag && $app_v[$i] eq "8.50") { $configure="psadmin -c configure -d "; }
@@ -640,7 +640,7 @@ sub startServer {
     $command = "";
     $i       = 0;
     foreach $app (@pro_u) {
-        if ( $app ne "" ) {
+        if ( $app ne "" && 'Running' ne $psadmin_ret_xlat{ statusDomain( $pro_d[$i], $pro_p[$i], $pro_u[$i], 'p' ) }) {
             $command = startCommand( $pro_u[$i] );
             $command = spliceStrings(
                 "", $command, " psadmin -p start -d ",
@@ -655,7 +655,7 @@ sub startServer {
     $command = "";
     $i       = 0;
     foreach $app (@web_u) {
-        if ( $app ne "" ) {
+        if ( $app ne "" && 'Running' ne $psadmin_ret_xlat{ statusDomain( $web_d[$i], $web_p[$i], $web_u[$i], 'w' ) }) {
             $command = startCommand( $web_u[$i] );
             $web_p[$i] =~ s/=//g;
 
@@ -784,7 +784,7 @@ sub stopServer {
         my $configure="true";
 
         foreach $app (@app_u) {
-            if ( $app ne "" ) {
+            if ( $app ne "" && 'Stopped' ne $psadmin_ret_xlat{ statusDomain( $app_d[$i], $app_p[$i], $app_u[$i], 'c' ) } ) {
                 if ($ipcflag && $app_v[$i] eq "8.50") { $ipcclean="psadmin -c cleanipc -d "; }
                 if ($preflag && $app_v[$i] eq "8.50") { $preload="psadmin -c preload -d"; }
                 if ($conflag && $app_v[$i] eq "8.50") { $configure="psadmin -c configure -d"; }
@@ -820,7 +820,7 @@ sub stopServer {
         my $exist;
         my $possiblefile = "";
         foreach $app (@pro_u) {
-            if ( $app ne "" ) {
+            if ( $app ne "" && 'Stopped' ne $psadmin_ret_xlat{ statusDomain( $pro_d[$i], $pro_p[$i], $pro_u[$i], 'p' ) }) {
                 if ($ipcflag && $app_v[$i] eq "8.50") { $ipcclean="psadmin -p cleanipc -d "; }
                 $command = startCommand( $pro_u[$i] );
                 $command = spliceStrings(
@@ -846,7 +846,7 @@ sub stopServer {
         my $exist;
         my $possiblefile = "";
         foreach $app (@web_u) {
-            if ( $app ne "" ) {
+            if ( $app ne "" && 'Stopped' ne $psadmin_ret_xlat{ statusDomain( $web_d[$i], $web_p[$i], $web_u[$i], 'w' ) }) {
                 $command = startCommand( $web_u[$i] );
                 $web_p[$i] =~ s/=//g;
                 $justname = $web_d[$i];
@@ -1147,8 +1147,9 @@ sub listServer {
     if ( $#app_u >= 0 ) {
         print "Application Servers:\n";
         foreach $app (@app_u) {
-            print "    $app_d[$i]";
+            print "    $app_d[$i] ";
             print $psadmin_ret_xlat{ statusDomain( $app_d[$i], $app_p[$i], $app_u[$i], 'c' ) } || $psadmin_ret_xlat{default};
+            print "\n";
             $i++;
         }
     }
@@ -1156,8 +1157,9 @@ sub listServer {
     if ( $#pro_u >= 0 ) {
         print "Process Servers:\n";
         foreach $app (@pro_u) {
-            print "    $pro_d[$i]";
+            print "    $pro_d[$i] ";
             print $psadmin_ret_xlat{ statusDomain( $pro_d[$i], $pro_p[$i], $pro_u[$i], 'p' ) } || $psadmin_ret_xlat{default};
+            print "\n";
             $i++;
         }
     }
@@ -1165,8 +1167,9 @@ sub listServer {
     if ( $#web_u >= 0 ) {
         print "Web Servers:\n";
         foreach $app (@web_u) {
-            print "    $web_d[$i]";
+            print "    $web_d[$i] ";
             print $psadmin_ret_xlat{ statusDomain( $web_d[$i], $web_p[$i], $web_u[$i], 'w' ) } || $psadmin_ret_xlat{default};
+            print "\n";
             $i++;
 
             # need web_d PIA to tell it is a web server
