@@ -563,8 +563,6 @@ sub startCommand {
 }
 
 sub runCommand {
-    my $retcode;
-
     sub runSystem {
         my $command  = shift @_;
 
@@ -580,9 +578,7 @@ sub runCommand {
         $mythreads[$threadcount] = new Thread \&runSystem, $command;
         $threadcount++;
     }
-    else { $retcode = runSystem($command); }
-    
-    return $retcode
+    else { return runSystem($command); }
 }
 
 sub okToRun {
@@ -590,7 +586,7 @@ sub okToRun {
     my $cdomain = shift @_;
     if ( $cdomain eq 'PIA' ) { $cdomain = shift @_; }
 
-    #print "ctype=$ctype , cdomain=$cdomain , domain=$domain , type=$type\n";
+    print "ctype=$ctype , cdomain=$cdomain , domain=$domain , type=$type\n";
     if ( $domain eq 'all' ) { $domain = 'ALL'; }
     if (   ( $domain eq 'ALL'    && ( $type eq 'all' || $type eq $ctype ) )
         || ( $domain eq $cdomain && ( $type eq 'all' || $type eq $ctype ) ) )
