@@ -26,6 +26,16 @@ our (
     @pro_d, @pro_p,  @cpro_u, @pro_v, @cpro_d, @cpro_p, @web_u,  @web_d,
     @web_p, @cweb_u, @cweb_d, @cweb_p, @web_v, @mythreads
 );
+
+# psadmin return code translation hash
+our %psadmin_ret_xlat =(
+    -1      => " psadmin failed to execute\n",
+    0       => " Success, generic 0\n",
+    4       => " Stopped\n",
+    5       => " Running\n",
+    default => " Exit code undefined in psadmin_ret_xlat\n"
+);
+
 my $commandline=join(' ',@ARGV);
 our $cfile;
 our $proi;
@@ -553,19 +563,26 @@ sub startCommand {
 }
 
 sub runCommand {
+    my $retcode;
 
     sub runSystem {
-        my $command = shift @_;
+        my $command  = shift @_;
+
         if ($pflag) { print "Command to be executed is:\n$command\n"; }
-        else { system($command); }
+        else { system("$command"); }
+        
+        return $? >> 8;
     }
-    my $command = shift @_;
+
+    my $command  = shift @_;
     print "Running ...\n$command\n" if defined $vflag;
     if ($thflag) {
         $mythreads[$threadcount] = new Thread \&runSystem, $command;
         $threadcount++;
     }
-    else { runSystem($command); }
+    else { $retcode = runSystem($command); }
+    
+    return $retcode
 }
 
 sub okToRun {
@@ -573,7 +590,7 @@ sub okToRun {
     my $cdomain = shift @_;
     if ( $cdomain eq 'PIA' ) { $cdomain = shift @_; }
 
-    print "ctype=$ctype , cdomain=$cdomain , domain=$domain , type=$type\n";
+    #print "ctype=$ctype , cdomain=$cdomain , domain=$domain , type=$type\n";
     if ( $domain eq 'all' ) { $domain = 'ALL'; }
     if (   ( $domain eq 'ALL'    && ( $type eq 'all' || $type eq $ctype ) )
         || ( $domain eq $cdomain && ( $type eq 'all' || $type eq $ctype ) ) )
@@ -1145,8 +1162,7 @@ sub listServer {
         print "Application Servers:\n";
         foreach $app (@app_u) {
             print "    $app_d[$i]";
-            statusAppServer( $app_d[$i] );
-            statusJSLServer( $app_d[$i] );
+            print $psadmin_ret_xlat{ statusDomain( $app_d[$i], $app_p[$i], $app_u[$i], 'c' ) } ;
             $i++;
         }
     }
@@ -1154,8 +1170,8 @@ sub listServer {
     if ( $#pro_u >= 0 ) {
         print "Process Servers:\n";
         foreach $app (@pro_u) {
-            print "     $pro_d[$i]";
-            statusProServer( $pro_d[$i], $pro_p[$i], $pro_u[$i] );
+            print "    $pro_d[$i]";
+            print $psadmin_ret_xlat{ statusDomain( $pro_d[$i], $pro_p[$i], $pro_u[$i], 'p' ) } ;
             $i++;
         }
     }
@@ -1163,8 +1179,8 @@ sub listServer {
     if ( $#web_u >= 0 ) {
         print "Web Servers:\n";
         foreach $app (@web_u) {
-            print "     $web_d[$i]";
-            statusWebServer( $web_d[$i], $web_p[$i] );
+            print "    $web_d[$i]";
+            print $psadmin_ret_xlat{ statusDomain( $web_d[$i], $web_p[$i], $web_u[$i], 'w' ) } ;
             $i++;
 
             # need web_d PIA to tell it is a web server
@@ -1180,7 +1196,6 @@ sub statusJSLServer {
 
     my $npcs = `ps -ef | grep -i "JSL -C dom=$server\_" | grep -v grep | wc -l`;
 
-#    my $npcs   = `ps -ef | grep $server | grep PSAPPSRV | grep -v grep | wc -l`;
     chop $npcs;
     if ( $npcs == 0 ) {
         print " (JSL Not Running)\n";
@@ -1357,32 +1372,27 @@ sub statusDomain{
     my $domaindir  = shift @_;
     my $domainuser = shift @_;
     my $domaintype = shift @_;
+    my $command;
+    my $longtype;
+    my $retcode    = 0;
+
+    if    ($domaintype eq 'w'){$longtype = 'web'}
+    elsif ($domaintype eq 'c'){$longtype = 'app'}
+    elsif ($domaintype eq 'p'){$longtype = 'pro'}
+    else  {die "invalid domain type, \"$domaintype\", passed to statusDomain"}
 
     $command = startCommand($domainuser);
     $command = spliceStrings(
         "", $command, "cd ",
-        $domaindir, "appserv/;  psadmin -$domaintype status -d ",
-        $domainname, " ; \" "
+        $domaindir, "/appserv/;  psadmin -$domaintype status -d ",
+        $domainname, " &> /dev/null; \" "
     );
-    if ( 'true' eq okToRun( 'pro', $server ) ) {
-        runCommand($command);
+
+    if ( 'true' eq okToRun( $longtype, $domainname) ) {
+        $retcode = runCommand($command);
     }
 
-    system("psadmin -$servertype status -d $server &> /dev/null");
-
-    if ( $? == -1 ) {
-        print " psadmin failed to execute\n";
-    }
-    elsif (($? >> 8) == 4) {
-        print " Stopped\n";
-    }
-    elsif (($? >> 8) == 5) {
-        print " Running\n";
-    }
-    else {
-        printf " Unknown exit: ", ($? >> 8);
-    }
-    return $? >> 8;
+    return $retcode
 }
 
 sub statusServer {
