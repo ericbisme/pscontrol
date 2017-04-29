@@ -1374,7 +1374,6 @@ sub statusDomain{
     my $domaintype = shift @_;
     my $command;
     my $longtype;
-    my $retcode    = 0;
 
     if    ($domaintype eq 'w'){$longtype = 'web'}
     elsif ($domaintype eq 'c'){$longtype = 'app'}
@@ -1388,11 +1387,7 @@ sub statusDomain{
         $domainname, " &> /dev/null; \" "
     );
 
-    if ( 'true' eq okToRun( $longtype, $domainname) ) {
-        $retcode = runCommand($command);
-    }
-
-    return $retcode
+    return runCommand($command);
 }
 
 sub statusServer {
