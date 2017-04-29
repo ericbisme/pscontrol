@@ -788,19 +788,11 @@ sub stopServer {
                 if ($ipcflag && $app_v[$i] eq "8.50") { $ipcclean="psadmin -c cleanipc -d "; }
                 if ($preflag && $app_v[$i] eq "8.50") { $preload="psadmin -c preload -d"; }
                 if ($conflag && $app_v[$i] eq "8.50") { $configure="psadmin -c configure -d"; }
-                #if ( $psadminc ne 'shutdown!' ) {
-                #    $killstr =
-                #        "; /bin/ps -e -o '%p,%a' | grep "
-                #      . $app_d[$i]
-                #      . " | grep psadmin | cut -d, -f1 | xargs kill -kill ";
-                #}
                 else {
                     killHungTmshutdown( $app_u[$i], $app_d[$i] );
                 }
                 $command = startCommand( $app_u[$i] );
                 $command = spliceStrings(
-                    #$command,   " . ",
-                    #$app_p[$i], "psconfig.sh; cd ",
                     $command,  "psadmin -c $psadminc -d ",
                     $app_d[$i], " ; $ipcclean $app_d[$i] ; $cachermcommand",
                     $app_p[$i], "appserv/",
@@ -832,8 +824,6 @@ sub stopServer {
                 if ($ipcflag && $app_v[$i] eq "8.50") { $ipcclean="psadmin -p cleanipc -d "; }
                 $command = startCommand( $pro_u[$i] );
                 $command = spliceStrings(
-                    #$command,   " . ",
-                    #$pro_p[$i], "psconfig.sh; cd ",
                     $command, " psadmin -p $psadminc -d ",
                     $pro_d[$i], " ; $ipcclean $pro_d[$i] ; $cachermcommand",
                     $pro_p[$i], "appserv/prcs/",
