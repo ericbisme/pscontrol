@@ -1429,7 +1429,7 @@ sub statusServer {
     my $fh;
     my $filename;
     ( $fh, $filename ) = tempfile( "tmpfileXXXXX", DIR => "/tmp", UNLINK => 1 );
-    my $run = `ps gvw  > $filename`;
+    my $run = `ps -e -o rss,vsz,pcpu,args | grep -f grep | grep "dom="$domain > $filename`;
 
 #####  Go through domain list
     foreach $application (@RUNNING_APPS) {
@@ -1453,7 +1453,7 @@ sub statusServer {
         my $psmem  = 0;
         my $appmem = 0;
 
-        $psmem = `cat $filename | grep -v grep | grep dom=${application} `;
+        $psmem = `cat $filename`;
         my @MEMLIST = split( /\s+/, $psmem );
         foreach $psmemlist (@MEMLIST) {
             $a  = ${MEMLIST}[6];
@@ -1466,8 +1466,8 @@ sub statusServer {
             $ma = $x / 1024;
             $mb = $y / 1024;
         }
-        $appmem =
-`cat $filename | grep -v grep | grep PSAPPSRV | grep dom=${application} `;
+
+        $appmem = `cat $filename`;
         close($fh);
 
         my @MEMLIST2 = split( /\s+/, $appmem );
@@ -1482,6 +1482,7 @@ sub statusServer {
             $ma2 = ${x2} / 1024;
             $mb2 = ${y2} / 1024;
         }
+
         printf
 "%6s \t\t%7.2f \t%3.2f \t%7.2f \t%3.2f \t%7.2f \t%3.2f \t%7.2f \t%3.2f \n",
           ${application}, ${ma2}, ${z2}, ${mb2}, ${d2}, ${ma}, ${z}, ${mb},
