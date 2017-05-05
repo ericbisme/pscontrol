@@ -19,7 +19,7 @@ our (
     $actcount,   $prescript,  $ncflag,    $fflag,        $seconds,
     $configfile, $postscript, $tracetype, $tracevalue,   $traceflag,
     $queuetype,  $domain,     $VERSION,   $myconfigfile, @APPSERVERS,
-    @WEBSERVERS, @servern,    $delay
+    @WEBSERVERS, @servern,    $delay,     $return_code
 );
 our (
     @app_u, @app_d,  @app_p,  @app_v, @capp_u, @capp_d, @capp_p, @pro_u,
@@ -111,6 +111,8 @@ if ( $action eq "stop" || $action eq "restart" && !$nlflag ) {
     listServer();
 }
 if ( $postscript && !$pflag ) { system($postscript); }
+
+return $return_code;
 
 sub logCommand {
    my $command=shift @_;
@@ -401,6 +403,7 @@ sub setDefaults() {
     if ( !$configfile ) { $configfile = $DefConfigFile; }
 
     if ( !$delay ) { $delay = 0; }
+    if ( !$return_code) { $return_code = 0; }
 }
 
 sub getFileOptions() {
@@ -1382,6 +1385,7 @@ sub statusDomain{
     my $domaintype = shift @_;
     my $command;
     my $longtype;
+    my $result;
 
     if    ($domaintype eq 'w'){$longtype = 'web'}
     elsif ($domaintype eq 'c'){$longtype = 'app'}
@@ -1395,7 +1399,11 @@ sub statusDomain{
         $domainname, " &> /dev/null; \" "
     );
 
-    return runCommand($command);
+    $result = runCommand($command)
+
+    if ( 'Running' ne $psadmin_ret_xlat{ $result }) { $return_code = 2; }
+    
+    return $result
 }
 
 sub statusServer {
