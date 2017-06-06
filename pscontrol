@@ -112,7 +112,7 @@ if ( $action eq "stop" || $action eq "restart" && !$nlflag ) {
 }
 if ( $postscript && !$pflag ) { system($postscript); }
 
-return $return_code;
+exit $return_code;
 
 sub logCommand {
    my $command=shift @_;
@@ -1399,9 +1399,15 @@ sub statusDomain{
         $domainname, " &> /dev/null; \" "
     );
 
-    $result = runCommand($command)
 
-    if ( 'Running' ne $psadmin_ret_xlat{ $result }) { $return_code = 2; }
+    # Set exit code 2 if any domain returns non-running status
+    # Unless JSL checking is disabled
+    $result = runCommand($command);
+    open( FH, "<$configdir/check_jsl-$machine" ) or die "$!";
+    unless (grep {/^$domainname disable/} (<FH>) ){
+        if ( 'Running' ne $psadmin_ret_xlat{ $result }) { $return_code = 2; }
+    }
+    close FH;
     
     return $result
 }
