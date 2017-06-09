@@ -556,10 +556,10 @@ sub startCommand {
     else {
 
         if ( $cuser eq $euser ) {
-            $scommand = "sh -c \" . $mypro ; $ulimit; ";
+            $scommand = "sh -c \" . $mypro > /dev/null 2>&1; $ulimit; ";
         }
         else {
-            $scommand = " sudo -u $euser sh -c \" . $mypro ; $ulimit; ";
+            $scommand = " sudo -u $euser sh -c \" . $mypro > /dev/null 2>&1 ; $ulimit; ";
         }
     }
     return $scommand;
