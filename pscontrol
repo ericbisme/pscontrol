@@ -15,7 +15,7 @@ $| = 1;
 our (
     $hflag,      $thflag,     $vflag,     $mflag,        $wflag,
     $nlflag,     $nmaflag,    $pflag,     $type,         $action, $ipcflag,
-    $parflag,    $preflag,    $conflag,
+    $parflag,    $preflag,    $conflag,   $configdir
     $actcount,   $prescript,  $ncflag,    $fflag,        $seconds,
     $configfile, $postscript, $tracetype, $tracevalue,   $traceflag,
     $queuetype,  $domain,     $VERSION,   $myconfigfile, @APPSERVERS,
@@ -383,7 +383,7 @@ sub genConfig {
 
 sub setDefaults() {
 
-    if ( !$configdir ) { our $configdir = '/etc/pscontrol'; }
+    if ( !$configdir ) { $configdir = '/etc/pscontrol'; }
     my $DefConfigFile = "$configdir/pscontrol.cfg-" . $machine;
 
     #Getopt::Long::Configure("debug");
