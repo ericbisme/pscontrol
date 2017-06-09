@@ -65,10 +65,12 @@ $type      = lc($type);
 ##Added option for delayed start. Default is 0 if not passed in
 sleep $delay;
 
-if ( existFile("$configdir/check_jsl-$machine") eq 'nofile' ) {
-    $nmaflag = 1;
+if ( -f "${configdir}/check_jsl-${machine}" ) {
+    $nmaflag = 0;
 }
-else { $nmaflag = 0; }
+else { $nmaflag = 1; }
+
+print "\n\n${nmaflag}\n\n";
 
 #
 # if we don't need to remove cache then put in a bogus command which
@@ -219,14 +221,14 @@ sub maintenance {
     my $ldomain = shift @_;
     my $oldv    = shift @_;
     my $newv    = shift @_;
-    #if ( !$nmaflag ) {
+    if ( !$nmaflag ) {
         if ($pflag) {
             print "`sed -i \"/^$ldomain/s/[^ ]*[^ ]/$newv/2\" $configdir/check_jsl-$machine`\n";
         }
         else {
             `sed -i "/^$ldomain/s/[^ ]*[^ ]/$newv/2" $configdir/check_jsl-$machine`;
         }
-    #}
+    }
 }
 
 sub beginMaintenance {
@@ -1393,11 +1395,13 @@ sub statusDomain{
     # Set exit code 2 if any domain returns non-running status
     # Unless JSL checking is disabled
     $result = runCommand($command);
-    open( FH, "<$configdir/check_jsl-$machine" ) or die "$!";
-    unless (grep {/^$domainname disable/} (<FH>) ){
-        if ( 'Running' ne $psadmin_ret_xlat{ $result }) { $return_code = 2; }
+    if ( !$nmaflag ) {
+        open( FH, "<${configdir}/check_jsl-${machine}" ) or die "$!";
+        unless (grep {/^$domainname disable/} (<FH>) ){
+            if ( 'Running' ne $psadmin_ret_xlat{ $result }) { $return_code = 2; }
+        }
+        close FH;
     }
-    close FH;
     
     return $result
 }
