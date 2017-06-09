@@ -70,8 +70,6 @@ if ( -f "${configdir}/check_jsl-${machine}" ) {
 }
 else { $nmaflag = 1; }
 
-print "\n\n${nmaflag}\n\n";
-
 #
 # if we don't need to remove cache then put in a bogus command which
 # gives no output.
@@ -106,7 +104,7 @@ if ( $action eq "list" )      { listServer(); }
 if ( $action eq "listqueue" ) { listQueue(); }
 if ( $action eq "status" )    { statusServer(); }
 if ($wflag) { waitOnThreads(); }
-if ( $action eq "stop" || $action eq "restart" && !$nlflag ) {
+if ( ($action eq "stop" || $action eq "restart" || $action eq "start") && !$nlflag ) {
     listServer();
 }
 if ( $postscript && !$pflag ) { system($postscript); }
@@ -1398,7 +1396,8 @@ sub statusDomain{
     if ( !$nmaflag ) {
         open( FH, "<${configdir}/check_jsl-${machine}" ) or die "$!";
         unless (grep {/^$domainname disable/} (<FH>) ){
-            if ( 'Running' ne $psadmin_ret_xlat{ $result }) { $return_code = 2; }
+            if ( 'Running' eq $psadmin_ret_xlat{ $result }) { $return_code = 0; }
+            else { $return_code = 2; }
         }
         close FH;
     }
