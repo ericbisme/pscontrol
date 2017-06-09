@@ -58,9 +58,9 @@ my($pscontrol_filename, $pscontrol_dirs, $pscontrol_suffix) = fileparse($pscontr
 chop($pscontrol_dirs);
 
 &processOptions;
-$queuetype = lowcase($queuetype);
-$domain    = lowcase($domain);
-$type      = lowcase($type);
+$queuetype = lc($queuetype);
+$domain    = lc($domain);
+$type      = lc($type);
 
 ##Added option for delayed start. Default is 0 if not passed in
 sleep $delay;
@@ -245,18 +245,6 @@ sub endMaintenance {
     print "JSL checking enabled for $ldomain!\n";
 }
 
-sub upcase {
-    my $str = shift @_;
-    $str =~ tr/a-z/A-Z/;
-    return $str;
-}
-
-sub lowcase {
-    my $str = shift @_;
-    $str =~ tr/A-Z/a-z/;
-    return $str;
-}
-
 sub waitOnThreads {
     my $mythreads;
     foreach $mythreads (@mythreads) {
@@ -330,11 +318,11 @@ sub writeGeneralConfiguration {
     print $cfile convertToProgram( '$vflag',      $vflag );
     print $cfile convertToProgram( '$prescript',  $prescript );
     print $cfile convertToProgram( '$postscript', $postscript );
-    print $cfile convertToProgram( '$domain',     lowcase($domain) );
+    print $cfile convertToProgram( '$domain',     lc($domain) );
     print $cfile convertToProgram( '$configfile', $configfile );
     print $cfile convertToProgram( '$thflag',     $thflag );
     print $cfile convertToProgram( '$wflag',      $wflag );
-    print $cfile convertToProgram( '$type',       lowcase($type) );
+    print $cfile convertToProgram( '$type',       lc($type) );
     print $cfile convertToProgram( '$ncflag',     $ncflag );
     print $cfile convertToProgram( '$nmaflag',    $nmaflag );
     print $cfile "# Index for arrays initialized\n";
@@ -480,12 +468,12 @@ sub processOptions {
         if ($action)     { $saction     = $action; }
         if ($vflag)      { $svflag      = $vflag; }
         if ($configfile) { $sconfigfile = $configfile; }
-        if ($domain)     { $sdomain     = lowcase($domain); }
+        if ($domain)     { $sdomain     = lc($domain); }
         if ($prescript)  { $sprescript  = $prescript; }
         if ($thflag)     { $sthflag     = $thflag; }
         if ($wflag)      { $swflag      = $wflag; }
-        if ($type)       { $stype       = lowcase($type); }
-        if ($queuetype)  { $squeuetype  = lowcase($queuetype); }
+        if ($type)       { $stype       = lc($type); }
+        if ($queuetype)  { $squeuetype  = lc($queuetype); }
         if ($ncflag)     { $sncflag     = $ncflag; }
         if ($nmaflag)    { $snmaflag    = $nmaflag; }
         if ($postscript) { $spostscript = $postscript; }
