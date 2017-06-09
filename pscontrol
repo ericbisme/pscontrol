@@ -65,8 +65,6 @@ $type      = lc($type);
 ##Added option for delayed start. Default is 0 if not passed in
 sleep $delay;
 
-mkdir $configdir unless -d $configdir;
-
 if ( existFile("$configdir/check_jsl-$machine") eq 'nofile' ) {
     $nmaflag = 1;
 }
@@ -372,8 +370,7 @@ sub genConfig {
 
 sub setDefaults() {
 
-    if ( !$configdir ) { $configdir = '/etc/pscontrol'; }
-    my $DefConfigFile = "$configdir/pscontrol.cfg-" . $machine;
+    my $DefConfigFile = "/etc/pscontrol/pscontrol.cfg-" . $machine;
 
     #Getopt::Long::Configure("debug");
     #Getopt::Long::Configure("pass_through");
@@ -389,6 +386,11 @@ sub setDefaults() {
     }
     if ( !$type )       { $type       = "all"; }
     if ( !$configfile ) { $configfile = $DefConfigFile; }
+
+    my ($config_name, $config_dirs, $config_suffix) = fileparse($configfile);
+
+    if ( !$configdir )  { $configdir  = $config_dirs; }
+    mkdir $configdir unless -d $configdir;
 
     if ( !$delay ) { $delay = 0; }
     if ( !$return_code) { $return_code = 0; }
