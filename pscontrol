@@ -53,18 +53,15 @@ $seconds        = 30;
 $actcount       = 0;
 $cachermcommand = "rm -rf ";
 
-#Define Configuration directory
-our $configdir;
 my $pscontrol_link = readlink "/usr/local/bin/pscontrol";
 my($pscontrol_filename, $pscontrol_dirs, $pscontrol_suffix) = fileparse($pscontrol_link);
 chop($pscontrol_dirs);
-$configdir = '/etc/pscontrol';
-mkdir $configdir unless -d $configdir;
 
 if ( existFile("$configdir/check_jsl-$machine") eq 'nofile' ) {
     $nmaflag = 1;
 }
 else { $nmaflag = 0; }
+
 &processOptions;
 $queuetype = lowcase($queuetype);
 $domain    = lowcase($domain);
@@ -73,6 +70,7 @@ $type      = lowcase($type);
 ##Added option for delayed start. Default is 0 if not passed in
 sleep $delay;
 
+mkdir $configdir unless -d $configdir;
 #
 # if we don't need to remove cache then put in a bogus command which
 # gives no output.
@@ -385,6 +383,7 @@ sub genConfig {
 
 sub setDefaults() {
 
+    if ( !$configdir ) { our $configdir = '/etc/pscontrol'; }
     my $DefConfigFile = "$configdir/pscontrol.cfg-" . $machine;
 
     #Getopt::Long::Configure("debug");
