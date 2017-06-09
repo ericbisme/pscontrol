@@ -385,6 +385,7 @@ sub setDefaults() {
         $domain = "ALL";
     }
     if ( !$type )       { $type       = "all"; }
+    if ( !$domain )     { $domain     = "all"; }
     if ( !$configfile ) { $configfile = $DefConfigFile; }
 
     my ($config_name, $config_dirs, $config_suffix) = fileparse($configfile);
