@@ -15,7 +15,7 @@ $| = 1;
 our (
     $hflag,      $thflag,     $vflag,     $mflag,        $wflag,
     $nlflag,     $nmaflag,    $pflag,     $type,         $action, $ipcflag,
-    $parflag,    $preflag,    $conflag,   $configdir
+    $parflag,    $preflag,    $conflag,   $configdir,
     $actcount,   $prescript,  $ncflag,    $fflag,        $seconds,
     $configfile, $postscript, $tracetype, $tracevalue,   $traceflag,
     $queuetype,  $domain,     $VERSION,   $myconfigfile, @APPSERVERS,
